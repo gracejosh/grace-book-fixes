@@ -1,4 +1,4 @@
-import { AlertTriangle, Loader2 } from "lucide-react";
+import { AlertTriangle, Loader2, RefreshCw, WifiOff } from "lucide-react";
 import type { ReactNode } from "react";
 
 export function PageShell({
@@ -28,14 +28,76 @@ export function Loading({ label = "Loading…" }: { label?: string }) {
   );
 }
 
-export function ErrorNote({ error }: { error: unknown }) {
-  const message = error instanceof Error ? error.message : "Something went wrong.";
+export function ErrorNote({
+  error,
+  title = "Couldn't load this data",
+  onRetry,
+  retrying,
+}: {
+  error: unknown;
+  title?: string;
+  onRetry?: () => void;
+  retrying?: boolean;
+}) {
+  const message =
+    error instanceof Error
+      ? error.message
+      : typeof error === "string" && error.trim()
+        ? error
+        : "Something went wrong.";
   return (
-    <div className="flex items-start gap-3 rounded-lg border border-destructive/40 bg-destructive/10 p-4 text-sm text-foreground">
+    <div
+      role="alert"
+      className="flex items-start gap-3 rounded-lg border border-destructive/40 bg-destructive/10 p-4 text-sm text-foreground"
+    >
       <AlertTriangle className="mt-0.5 size-4 shrink-0 text-destructive" aria-hidden />
-      <div>
-        <p className="font-medium">Couldn't load this data</p>
-        <p className="mt-1 text-muted-foreground">{message}</p>
+      <div className="min-w-0">
+        <p className="font-medium">{title}</p>
+        <p className="mt-1 break-words text-muted-foreground">{message}</p>
+        {onRetry ? (
+          <button
+            type="button"
+            onClick={onRetry}
+            disabled={retrying}
+            className="mt-3 inline-flex items-center gap-1.5 rounded-md border border-border bg-background px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-accent disabled:opacity-60"
+          >
+            <RefreshCw className={`size-3.5 ${retrying ? "animate-spin" : ""}`} aria-hidden />
+            {retrying ? "Retrying…" : "Try again"}
+          </button>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+export function WarningNote({
+  title,
+  message,
+  onRetry,
+}: {
+  title: string;
+  message: string;
+  onRetry?: () => void;
+}) {
+  return (
+    <div
+      role="status"
+      className="mb-5 flex items-start gap-3 rounded-lg border border-border bg-muted p-3 text-sm text-foreground"
+    >
+      <WifiOff className="mt-0.5 size-4 shrink-0 text-muted-foreground" aria-hidden />
+      <div className="min-w-0">
+        <p className="font-medium">{title}</p>
+        <p className="mt-0.5 text-muted-foreground">{message}</p>
+        {onRetry ? (
+          <button
+            type="button"
+            onClick={onRetry}
+            className="mt-2 inline-flex items-center gap-1.5 rounded-md border border-border bg-background px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-accent"
+          >
+            <RefreshCw className="size-3.5" aria-hidden />
+            Reconnect
+          </button>
+        ) : null}
       </div>
     </div>
   );

@@ -36,7 +36,7 @@ type Course = {
 };
 
 function CoursesPage() {
-  const { data, isLoading, error } = useQuery({
+  const { data, isLoading, error, refetch, isFetching } = useQuery({
     queryKey: ["courses"],
     queryFn: async () => {
       const { data, error } = await requireSupabase().from("courses").select("*");
@@ -52,7 +52,12 @@ function CoursesPage() {
         {isLoading ? (
           <Loading label="Loading courses…" />
         ) : error ? (
-          <ErrorNote error={error} />
+          <ErrorNote
+            error={error}
+            title="Couldn't load courses"
+            onRetry={() => void refetch()}
+            retrying={isFetching}
+          />
         ) : !data || data.length === 0 ? (
           <EmptyNote>No courses yet. Add rows to the “courses” table to see them here.</EmptyNote>
         ) : (
