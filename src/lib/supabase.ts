@@ -1,37 +1,38 @@
-import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { createClient } from '@supabase/supabase-js';
 
-const url = import.meta.env['VITE_SUPABASE_URL'] as string | undefined;
-const anonKey = import.meta.env['VITE_SUPABASE_ANON_KEY'] as string | undefined;
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string | undefined;
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
 
-export const isSupabaseConfigured = Boolean(url && anonKey);
-
-let client: SupabaseClient | null = null;
-
-/**
- * Returns the Supabase client, or null when env vars are not set yet
- * (e.g. before credentials are added in the Netlify dashboard).
- */
-export function getSupabase(): SupabaseClient | null {
-  if (!isSupabaseConfigured) return null;
-  if (!client) {
-    client = createClient(url!, anonKey!, {
-      auth: { persistSession: true, autoRefreshToken: true },
-    });
-  }
-  return client;
+if (!supabaseUrl || !supabaseAnonKey) {
+  throw new Error(
+    'Missing Supabase configuration. Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in your .env file.',
+  );
 }
 
-export class MissingCredentialsError extends Error {
-  constructor() {
-    super(
-      "Database credentials are not configured. Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY.",
-    );
-    this.name = "MissingCredentialsError";
-  }
-}
+export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+  auth: {
+    persistSession: true,
+    autoRefreshToken: true,
+    detectSessionInUrl: true,
+  },
+});
 
-export function requireSupabase(): SupabaseClient {
-  const supabase = getSupabase();
-  if (!supabase) throw new MissingCredentialsError();
-  return supabase;
+export const CLOUDINARY_CLOUD_NAME = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME as string;
+export const CLOUDINARY_UPLOAD_PRESET = import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET as string;
+export const CLOUDINARY_API_KEY = import.meta.env.VITE_CLOUDINARY_API_KEY as string;
+
+export async function uploadToCloudinary(file: File, resourceType: 'image' | 'raw' | 'video' = 'image'): Promise<string> {
+  const url = `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/${resourceType}/upload`;
+  const formData = new FormData();
+  formData.append('file', file);
+  formData.append('upload_preset', CLOUDINARY_UPLOAD_PRESET);
+  formData.append('api_key', CLOUDINARY_API_KEY);
+
+  const response = await fetch(url, {
+    method: 'POST',
+    body: formData,
+  });
+  if (!response.ok) throw new Error('Upload failed');
+  const data = await response.json();
+  return data.secure_url as string;
 }
