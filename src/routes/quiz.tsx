@@ -82,7 +82,7 @@ function toAnswerIndex(row: QuizRow, options: string[]): number | null {
 function QuizPage() {
   const [answers, setAnswers] = useState<Record<string, number>>({});
 
-  const { data, isLoading, error } = useQuery({
+  const { data, isLoading, error, refetch, isFetching } = useQuery({
     queryKey: ["quizzes"],
     queryFn: async () => {
       const { data, error } = await requireSupabase().from("quizzes").select("*");
@@ -107,7 +107,12 @@ function QuizPage() {
         {isLoading ? (
           <Loading label="Loading questions…" />
         ) : error ? (
-          <ErrorNote error={error} />
+          <ErrorNote
+            error={error}
+            title="Couldn't load quiz questions"
+            onRetry={() => void refetch()}
+            retrying={isFetching}
+          />
         ) : !data || data.length === 0 ? (
           <EmptyNote>No questions yet. Add rows to the “quizzes” table to see them here.</EmptyNote>
         ) : (

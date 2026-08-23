@@ -35,7 +35,7 @@ type Book = {
 };
 
 function BooksPage() {
-  const { data, isLoading, error } = useQuery({
+  const { data, isLoading, error, refetch, isFetching } = useQuery({
     queryKey: ["books"],
     queryFn: async () => {
       const { data, error } = await requireSupabase().from("books").select("*");
@@ -51,7 +51,12 @@ function BooksPage() {
         {isLoading ? (
           <Loading label="Loading books…" />
         ) : error ? (
-          <ErrorNote error={error} />
+          <ErrorNote
+            error={error}
+            title="Couldn't load books"
+            onRetry={() => void refetch()}
+            retrying={isFetching}
+          />
         ) : !data || data.length === 0 ? (
           <EmptyNote>No books yet. Add rows to the “books” table to see them here.</EmptyNote>
         ) : (
