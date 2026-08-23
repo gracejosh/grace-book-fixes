@@ -221,7 +221,7 @@ export default function Home() {
               return (
                 <motion.div key={card.to} initial={{ opacity: 0, y: 30 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ delay: i * 0.08 }}>
                   <Link to={card.to} className="group block glass-card p-6 h-full hover:shadow-2xl transition-all duration-300 hover:-translate-y-1">
-                    <div className={`inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-gradient-to-br ${card.gradient} mb-4 shadow-lg group-hover:scale-110 transition-transform duration-300">
+                    <div className={`inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-gradient-to-br ${card.gradient} mb-4 shadow-lg group-hover:scale-110 transition-transform duration-300`}>
                       <Icon className="h-7 w-7 text-white" />
                     </div>
                     <h3 className="text-xl font-bold mb-2 group-hover:text-primary-600 dark:group-hover:text-primary-400 transition-colors">{t(card.titleKey)}</h3>
