@@ -8,8 +8,9 @@ import { ErrorBoundary } from '@/components/ErrorBoundary';
 import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
 import ScrollToTop from '@/components/ScrollToTop';
+import AdPopup from '@/components/AdPopup';
 import Home from '@/pages/Home';
-import Verses from '@/pages/Verses';
+import Posts from '@/pages/Posts';
 import Books from '@/pages/Books';
 import Courses from '@/pages/Courses';
 import Quiz from '@/pages/Quiz';
@@ -39,7 +40,7 @@ export default function App() {
                   <main className="flex-1">
                     <Routes>
                       <Route path="/" element={<Home />} />
-                      <Route path="/verses" element={<Verses />} />
+                      <Route path="/posts" element={<Posts />} />
                       <Route path="/books" element={<Books />} />
                       <Route path="/courses" element={<Courses />} />
                       <Route path="/quiz" element={<Quiz />} />
@@ -51,6 +52,7 @@ export default function App() {
                     </Routes>
                   </main>
                   <Footer />
+                  <AdPopup />
                 </div>
               </BrowserRouter>
             </ToastProvider>
