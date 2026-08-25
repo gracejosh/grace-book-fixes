@@ -6,10 +6,10 @@ import { useLang } from '@/context/LanguageContext';
 import { useToast } from '@/context/ToastContext';
 import { getDailyVerseEntry } from '@/lib/dailyVerses';
 import { fetchVerseForLang, type BibleVerseData } from '@/lib/bibleApi';
-import { BookOpen, Library, GraduationCap, BrainCircuit, MessageCircle, ArrowRight, Quote, Users, BookMarked, Award, MessageSquare, Sparkles, Heart, Code, RefreshCw } from 'lucide-react';
+import { BookOpen, Library, GraduationCap, BrainCircuit, MessageCircle, ArrowRight, Quote, Users, BookMarked, Award, MessageSquare, Sparkles, Heart, Code, RefreshCw, LayoutGrid } from 'lucide-react';
 
 const navCardData = [
-  { to: '/verses', titleKey: 'home.card.verses', descKey: 'home.card.versesDesc', icon: BookOpen, gradient: 'from-primary-500 to-primary-700' },
+  { to: '/posts', titleKey: 'home.card.posts', descKey: 'home.card.postsDesc', icon: LayoutGrid, gradient: 'from-primary-500 to-primary-700' },
   { to: '/books', titleKey: 'home.card.books', descKey: 'home.card.booksDesc', icon: Library, gradient: 'from-gold-400 to-gold-600' },
   { to: '/courses', titleKey: 'home.card.courses', descKey: 'home.card.coursesDesc', icon: GraduationCap, gradient: 'from-accent-500 to-accent-700' },
   { to: '/quiz', titleKey: 'home.card.quiz', descKey: 'home.card.quizDesc', icon: BrainCircuit, gradient: 'from-rose-500 to-rose-700' },
@@ -113,7 +113,6 @@ export default function Home() {
 
   return (
     <div>
-      {/* Hero */}
       <section className="relative overflow-hidden min-h-[600px] flex items-center">
         <div className="absolute inset-0 bg-gradient-to-br from-primary-900 via-primary-800 to-slate-900 dark:from-slate-950 dark:via-primary-950 dark:to-slate-950" />
         <div className="absolute inset-0 opacity-30">
@@ -138,9 +137,9 @@ export default function Home() {
               {t('home.heroDesc')}
             </p>
             <div className="flex flex-wrap gap-4">
-              <Link to="/verses" className="btn-gold">
-                <BookOpen className="h-4 w-4" />
-                {t('home.readVerse')}
+              <Link to="/posts" className="btn-gold">
+                <LayoutGrid className="h-4 w-4" />
+                Explore Posts
               </Link>
               <Link to="/courses" className="inline-flex items-center justify-center gap-2 rounded-xl bg-white/10 backdrop-blur-md border border-white/20 px-6 py-3 text-sm font-semibold text-white transition-all hover:bg-white/20 hover:scale-[1.02]">
                 {t('home.exploreCourses')}
@@ -149,7 +148,6 @@ export default function Home() {
             </div>
           </motion.div>
 
-          {/* Daily verse card */}
           <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.6, delay: 0.2 }} className="relative">
             {loading || fetchingVerse ? (
               <div className="glass-card p-8 border-white/30">
@@ -167,7 +165,7 @@ export default function Home() {
                     </div>
                     <span className="text-sm font-semibold text-gold-400 uppercase tracking-wider">{t('home.verseOfDay')}</span>
                   </div>
-                  <button onClick={fetchRandom} className="p-2 rounded-lg bg-white/10 hover:bg-white/20 transition-all" title={t('verses.newRandom')}>
+                  <button onClick={fetchRandom} className="p-2 rounded-lg bg-white/10 hover:bg-white/20 transition-all" title={t('verses.newRandom')}
                     <RefreshCw className={`h-4 w-4 text-white ${fetchingVerse ? 'animate-spin' : ''}`} />
                   </button>
                 </div>
@@ -177,8 +175,8 @@ export default function Home() {
                 <p className="text-gold-400 font-semibold text-lg">— {verseData.reference}</p>
                 <div className="mt-6 pt-6 border-t border-white/10 flex items-center justify-between">
                   <span className="text-sm text-white/60">{verseCategory}</span>
-                  <Link to="/verses" className="text-sm text-white/80 hover:text-gold-400 flex items-center gap-1 transition-colors">
-                    {t('home.moreVerses')} <ArrowRight className="h-3 w-3" />
+                  <Link to="/posts" className="text-sm text-white/80 hover:text-gold-400 flex items-center gap-1 transition-colors">
+                    View Posts <ArrowRight className="h-3 w-3" />
                   </Link>
                 </div>
               </div>
@@ -187,7 +185,6 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Stats */}
       <section className="py-12 bg-white dark:bg-slate-900 -mt-1 relative z-10">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
@@ -207,7 +204,6 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Navigation cards */}
       <section className="section-padding">
         <div className="container-narrow">
           <motion.div initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} className="text-center mb-12">
@@ -237,7 +233,6 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Testimonials */}
       <section className="section-padding bg-gradient-to-br from-primary-50 to-gold-50 dark:from-slate-900 dark:to-slate-950">
         <div className="container-narrow">
           <motion.div initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} className="text-center mb-12">
@@ -267,7 +262,6 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Newsletter CTA */}
       <section className="section-padding">
         <div className="container-narrow">
           <motion.div initial={{ opacity: 0, scale: 0.95 }} whileInView={{ opacity: 1, scale: 1 }} viewport={{ once: true }} className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-primary-700 to-primary-900 p-8 sm:p-12 text-center">
