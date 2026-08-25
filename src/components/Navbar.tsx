@@ -1,6 +1,6 @@
 import { Link, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { BookOpen, Home, Library, GraduationCap, BrainCircuit, MessageCircle, User, Moon, Sun, Menu, X, Sparkles, Languages } from 'lucide-react';
+import { BookOpen, Home, Library, GraduationCap, BrainCircuit, MessageCircle, User, Moon, Sun, Menu, X, Sparkles, Languages, LayoutGrid } from 'lucide-react';
 import { useState } from 'react';
 import { useTheme } from '@/context/ThemeContext';
 import { useAuth } from '@/context/AuthContext';
@@ -8,7 +8,7 @@ import { useLang } from '@/context/LanguageContext';
 
 const navLinks = [
   { to: '/', key: 'nav.home', icon: Home },
-  { to: '/verses', key: 'nav.verses', icon: BookOpen },
+  { to: '/posts', key: 'nav.posts', icon: LayoutGrid },
   { to: '/books', key: 'nav.books', icon: Library },
   { to: '/courses', key: 'nav.courses', icon: GraduationCap },
   { to: '/quiz', key: 'nav.quiz', icon: BrainCircuit },

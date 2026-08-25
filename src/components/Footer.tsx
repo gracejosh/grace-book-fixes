@@ -6,7 +6,7 @@ export default function Footer() {
   const { t } = useLang();
 
   const exploreLinks = [
-    { to: '/verses', label: t('footer.bibleVerses') },
+    { to: '/posts', label: 'Posts' },
     { to: '/books', label: t('footer.booksLibrary') },
     { to: '/courses', label: t('footer.freeCourses') },
     { to: '/quiz', label: t('footer.quizChallenge') },
