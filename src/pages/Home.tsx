@@ -165,7 +165,7 @@ export default function Home() {
                     </div>
                     <span className="text-sm font-semibold text-gold-400 uppercase tracking-wider">{t('home.verseOfDay')}</span>
                   </div>
-                  <button onClick={fetchRandom} className="p-2 rounded-lg bg-white/10 hover:bg-white/20 transition-all" title={t('verses.newRandom')}
+                  <button onClick={fetchRandom} className="p-2 rounded-lg bg-white/10 hover:bg-white/20 transition-all" title={t('verses.newRandom')}>
                     <RefreshCw className={`h-4 w-4 text-white ${fetchingVerse ? 'animate-spin' : ''}`} />
                   </button>
                 </div>
