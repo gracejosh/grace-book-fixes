@@ -5,7 +5,6 @@ export interface Profile {
   avatar_url: string | null;
   bio: string | null;
   is_admin: boolean;
-  is_banned: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -29,9 +28,6 @@ export interface Book {
   category: string;
   file_format: string;
   downloads_count: number;
-  price_type: 'free' | 'paid';
-  apple_books_url: string | null;
-  epub_url: string | null;
   created_at: string;
 }
 
@@ -138,56 +134,5 @@ export interface ContactMessage {
   email: string;
   subject: string | null;
   message: string;
-  created_at: string;
-}
-
-export interface Flyer {
-  id: string;
-  user_id: string;
-  title: string;
-  description: string | null;
-  images: string[];
-  category: string;
-  likes_count: number;
-  created_at: string;
-}
-
-export interface Post {
-  id: string;
-  user_id: string;
-  type: 'text' | 'image' | 'pdf' | 'audio';
-  content: string;
-  file_url: string | null;
-  likes_count: number;
-  created_at: string;
-}
-
-export interface Blog {
-  id: string;
-  user_id: string;
-  title: string;
-  content: string;
-  image_url: string | null;
-  video_url: string | null;
-  category: string;
-  likes_count: number;
-  created_at: string;
-}
-
-export interface BlogComment {
-  id: string;
-  blog_id: string;
-  user_id: string;
-  content: string;
-  created_at: string;
-}
-
-export interface PopupAd {
-  id: string;
-  title: string;
-  content: string | null;
-  image_url: string | null;
-  link_url: string | null;
-  is_active: boolean;
   created_at: string;
 }
