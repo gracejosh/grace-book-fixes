@@ -138,3 +138,10 @@ export interface ContactMessage {
   message: string;
   created_at: string;
 }
+
+export interface LiveChatMessage {
+  id: string;
+  author: string;
+  text: string;
+  createdAt: string;
+}

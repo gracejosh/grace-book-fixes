@@ -23,6 +23,7 @@ import Posts from '@/pages/Posts';
 import Blog from '@/pages/Blog';
 import Settings from '@/pages/Settings';
 import Notebook from '@/pages/Notebook';
+import Live from '@/pages/Live';
 import NotFound from '@/pages/NotFound';
 
 export default function App() {
@@ -58,6 +59,7 @@ export default function App() {
                       <Route path="/blog" element={<Blog />} />
                       <Route path="/settings" element={<Settings />} />
                       <Route path="/notebook" element={<Notebook />} />
+                      <Route path="/live" element={<Live />} />
                       <Route path="*" element={<NotFound />} />
                     </Routes>
                   </main>
