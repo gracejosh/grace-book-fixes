@@ -54,17 +54,24 @@ export default function Chat() {
 
   // Load profiles for message senders and private room participants
   const loadProfiles = useCallback(async (ids: string[]) => {
-    const uniqueIds = [...new Set(ids)].filter((id) => !profiles[id]);
+    const uniqueIds = [...new Set(ids)].filter(Boolean);
     if (uniqueIds.length === 0) return;
-    const { data } = await supabase.from('profiles').select('*').in('id', uniqueIds);
-    if (data) {
-      setProfiles((prev) => {
-        const next = { ...prev };
-        data.forEach((p: Profile) => { next[p.id] = p; });
-        return next;
-      });
-    }
-  }, [profiles]);
+    setProfiles((prev) => {
+      const stillNeeded = uniqueIds.filter((id) => !prev[id]);
+      if (stillNeeded.length === 0) return prev;
+      (async () => {
+        const { data } = await supabase.from('profiles').select('*').in('id', stillNeeded);
+        if (data) {
+          setProfiles((cur) => {
+            const next = { ...cur };
+            data.forEach((p: Profile) => { next[p.id] = p; });
+            return next;
+          });
+        }
+      })();
+      return prev;
+    });
+  }, []);
 
   // Load messages for selected room
   useEffect(() => {
@@ -115,20 +122,37 @@ export default function Chat() {
 
   // User search for private messages
   const searchUsers = useCallback(async (query: string) => {
-    if (!query.trim() || !user) {
-      setUserResults([]);
-      return;
-    }
+    if (!user) return;
     setUserSearchLoading(true);
-    const { data } = await supabase
-      .from('profiles')
-      .select('*')
-      .neq('id', user.id)
-      .ilike('username', `%${query}%`)
-      .limit(20);
-    setUserResults((data as Profile[]) ?? []);
+    let data: Profile[] | null = null;
+    if (!query.trim()) {
+      const res = await supabase
+        .from('profiles')
+        .select('*')
+        .neq('id', user.id)
+        .order('created_at', { ascending: false })
+        .limit(20);
+      data = (res.data as Profile[]) ?? null;
+    } else {
+      const res = await supabase
+        .from('profiles')
+        .select('*')
+        .neq('id', user.id)
+        .or(`username.ilike.%${query}%,full_name.ilike.%${query}%`)
+        .limit(20);
+      data = (res.data as Profile[]) ?? null;
+    }
+    setUserResults(data ?? []);
     setUserSearchLoading(false);
   }, [user]);
+
+  // Load user list when search modal opens
+  useEffect(() => {
+    if (showUserSearch) {
+      setUserSearchQuery('');
+      searchUsers('');
+    }
+  }, [showUserSearch, searchUsers]);
 
   const startPrivateChat = async (otherUser: Profile) => {
     if (!user) return;
@@ -609,7 +633,7 @@ export default function Chat() {
                     setUserSearchQuery(e.target.value);
                     searchUsers(e.target.value);
                   }}
-                  placeholder="Search username..."
+                  placeholder="Search by name or username..."
                   className="input-field pl-10"
                   autoFocus
                 />
@@ -621,7 +645,7 @@ export default function Chat() {
                   </div>
                 ) : userResults.length === 0 ? (
                   <p className="text-center text-slate-500 text-sm py-4">
-                    {userSearchQuery ? 'No users found' : 'Type a username to search'}
+                    {userSearchQuery ? 'No users found' : 'No users yet'}
                   </p>
                 ) : (
                   userResults.map((p) => (
