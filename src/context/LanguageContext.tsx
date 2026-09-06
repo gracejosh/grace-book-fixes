@@ -19,6 +19,7 @@ export const translations: Record<string, { en: string; am: string }> = {
   'nav.courses': { en: 'Courses', am: 'ኮርሶች' },
   'nav.quiz': { en: 'Quiz', am: 'ጥያቄዎች' },
   'nav.chat': { en: 'Chat', am: 'ውይይት' },
+  'nav.live': { en: 'Live', am: 'ቀጥታ' },
   'nav.profile': { en: 'Profile', am: 'መገለጫ' },
   'nav.admin': { en: 'Admin', am: 'አስተዳደር' },
   'nav.about': { en: 'About', am: 'ስለ እኛ' },

@@ -2,7 +2,7 @@ import { Link, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   BookOpen, Home, Library, GraduationCap, BrainCircuit, MessageCircle, User,
-  Moon, Sun, Menu, X, Sparkles, Languages, Newspaper, Image as ImageIcon,
+  Moon, Sun, Menu, X, Sparkles, Languages, Newspaper, Image as ImageIcon, Video,
   FileText, HandHeart, Settings as SettingsIcon, Notebook as NotebookIcon,
 } from 'lucide-react';
 import { useState } from 'react';
@@ -18,6 +18,7 @@ const desktopLinks = [
   { to: '/courses', key: 'nav.courses', icon: GraduationCap },
   { to: '/quiz', key: 'nav.quiz', icon: BrainCircuit },
   { to: '/chat', key: 'nav.chat', icon: MessageCircle },
+  { to: '/live', key: 'nav.live', icon: Video },
   { to: '/flyers', key: 'nav.flyers', icon: ImageIcon },
   { to: '/posts', key: 'nav.posts', icon: FileText },
   { to: '/blog', key: 'nav.blog', icon: Newspaper },
@@ -36,6 +37,7 @@ const bottomLinks = [
 // Side drawer items
 const drawerLinks = [
   { to: '/verses', key: 'nav.bible', icon: BookOpen },
+  { to: '/live', key: 'nav.live', icon: Video },
   { to: '/flyers', key: 'nav.flyers', icon: ImageIcon },
   { to: '/courses', key: 'nav.courses', icon: GraduationCap },
   { to: '/quiz', key: 'nav.quiz', icon: BrainCircuit },
