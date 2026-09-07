@@ -19,14 +19,7 @@ function base64UrlEncodeString(str: string): string {
   return btoa(str).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 }
 
-async function base64UrlEncode(data: ArrayBuffer): Promise<string> {
-  const bytes = new Uint8Array(data);
-  let binary = '';
-  for (const byte of bytes) binary += String.fromCharCode(byte);
-  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-}
-
-async function generateVideoSDKToken(): Promise<string> {
+function generateVideoSDKToken(): string {
   const header = { alg: 'HS256', typ: 'JWT' };
   const now = Math.floor(Date.now() / 1000);
   const payload = {
@@ -40,16 +33,12 @@ async function generateVideoSDKToken(): Promise<string> {
   const payloadB64 = base64UrlEncodeString(JSON.stringify(payload));
   const signingInput = `${headerB64}.${payloadB64}`;
 
-  const enc = new TextEncoder();
-  const key = await crypto.subtle.importKey(
-    'raw',
-    enc.encode(VIDEOSDK_SECRET),
-    { name: 'HMAC', hash: 'SHA-256' },
-    false,
-    ['sign'],
-  );
-  const signature = await crypto.subtle.sign('HMAC', key, enc.encode(signingInput));
-  const sigB64 = await base64UrlEncode(signature);
+  const CryptoJS = (window as any).CryptoJS;
+  const signature = CryptoJS.HmacSHA256(signingInput, VIDEOSDK_SECRET);
+  const sigB64 = CryptoJS.enc.Base64.stringify(signature)
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/, '');
 
   return `${headerB64}.${payloadB64}.${sigB64}`;
 }
@@ -163,7 +152,7 @@ export default function Live() {
 
   const startBroadcast = async () => {
     setCreating(true);
-    const token = await generateVideoSDKToken();
+    const token = generateVideoSDKToken();
     setVideosdkToken(token);
     const id = await createMeeting(token);
     if (id) {
