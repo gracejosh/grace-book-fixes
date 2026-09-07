@@ -4,6 +4,7 @@ import {
   Home, Library, MessageCircle, User, Moon, Sun, Menu, X,
   Image as ImageIcon, GraduationCap, BrainCircuit, Newspaper,
   Sparkles, Settings as SettingsIcon, ChevronRight,
+  BookOpen, NotebookPen, Radio, Heart,
 } from 'lucide-react';
 import { useState } from 'react';
 import { useTheme } from '@/context/ThemeContext';
@@ -21,10 +22,15 @@ const bottomNavLinks = [
 ];
 
 const drawerLinks = [
+  { to: '/verses', key: 'nav.verses', icon: BookOpen },
   { to: '/flyers', key: 'nav.flyers', icon: ImageIcon },
   { to: '/courses', key: 'nav.courses', icon: GraduationCap },
   { to: '/quiz', key: 'nav.quiz', icon: BrainCircuit },
-  { to: '/blogs', key: 'nav.blogs', icon: Newspaper },
+  { to: '/posts', key: 'nav.posts', icon: MessageCircle },
+  { to: '/blog', key: 'nav.blog', icon: Newspaper },
+  { to: '/notebook', key: 'nav.notebook', icon: NotebookPen },
+  { to: '/live', key: 'nav.live', icon: Radio },
+  { to: '/donate', key: 'nav.donate', icon: Heart },
   { to: '/about', key: 'nav.about', icon: Sparkles },
   { to: '/settings', key: 'nav.settings', icon: SettingsIcon },
 ];
