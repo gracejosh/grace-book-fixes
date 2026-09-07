@@ -29,18 +29,37 @@ export const CLOUDINARY_CLOUD_NAME = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME 
 export const CLOUDINARY_UPLOAD_PRESET = import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET as string;
 export const CLOUDINARY_API_KEY = import.meta.env.VITE_CLOUDINARY_API_KEY as string;
 
-export async function uploadToCloudinary(file: File, resourceType: 'image' | 'raw' | 'video' = 'image'): Promise<string> {
+export async function uploadToCloudinary(
+  file: File,
+  resourceType: 'image' | 'raw' | 'video' = 'image',
+  onProgress?: (progress: number) => void,
+): Promise<string> {
   const url = `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/${resourceType}/upload`;
   const formData = new FormData();
   formData.append('file', file);
   formData.append('upload_preset', CLOUDINARY_UPLOAD_PRESET);
   formData.append('api_key', CLOUDINARY_API_KEY);
 
-  const response = await fetch(url, {
-    method: 'POST',
-    body: formData,
+  return new Promise<string>((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', url);
+
+    xhr.upload.onprogress = (e) => {
+      if (e.lengthComputable && onProgress) {
+        onProgress(Math.round((e.loaded / e.total) * 100));
+      }
+    };
+
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        const data = JSON.parse(xhr.responseText);
+        resolve(data.secure_url as string);
+      } else {
+        reject(new Error('Upload failed'));
+      }
+    };
+
+    xhr.onerror = () => reject(new Error('Upload failed'));
+    xhr.send(formData);
   });
-  if (!response.ok) throw new Error('Upload failed');
-  const data = await response.json();
-  return data.secure_url as string;
 }

@@ -1,23 +1,19 @@
 import { motion } from 'framer-motion';
 import { Link } from 'react-router-dom';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useLang } from '@/context/LanguageContext';
 import { useToast } from '@/context/ToastContext';
 import { getDailyVerseEntry } from '@/lib/dailyVerses';
 import { fetchVerseForLang, type BibleVerseData } from '@/lib/bibleApi';
-import { BookOpen, Library, GraduationCap, BrainCircuit, MessageCircle, ArrowRight, Quote, Users, BookMarked, Award, MessageSquare, Sparkles, Heart, Code, RefreshCw, Newspaper, Image as ImageIcon, FileText } from 'lucide-react';
-import GospelRadio from '@/components/GospelRadio';
+import { BookOpen, Library, GraduationCap, BrainCircuit, MessageCircle, ArrowRight, Quote, Users, BookMarked, Award, MessageSquare, Sparkles, Heart, Code, RefreshCw, LayoutGrid, Radio, Play, Pause, AlertCircle } from 'lucide-react';
 
 const navCardData = [
-  { to: '/verses', titleKey: 'home.card.verses', descKey: 'home.card.versesDesc', icon: BookOpen, gradient: 'from-primary-500 to-primary-700' },
+  { to: '/posts', titleKey: 'home.card.posts', descKey: 'home.card.postsDesc', icon: LayoutGrid, gradient: 'from-primary-500 to-primary-700' },
   { to: '/books', titleKey: 'home.card.books', descKey: 'home.card.booksDesc', icon: Library, gradient: 'from-gold-400 to-gold-600' },
   { to: '/courses', titleKey: 'home.card.courses', descKey: 'home.card.coursesDesc', icon: GraduationCap, gradient: 'from-accent-500 to-accent-700' },
   { to: '/quiz', titleKey: 'home.card.quiz', descKey: 'home.card.quizDesc', icon: BrainCircuit, gradient: 'from-rose-500 to-rose-700' },
   { to: '/chat', titleKey: 'home.card.chat', descKey: 'home.card.chatDesc', icon: MessageCircle, gradient: 'from-emerald-500 to-emerald-700' },
-  { to: '/flyers', titleKey: 'home.card.about', descKey: 'home.card.aboutDesc', icon: ImageIcon, gradient: 'from-violet-500 to-violet-700' },
-  { to: '/posts', titleKey: 'home.card.about', descKey: 'home.card.aboutDesc', icon: FileText, gradient: 'from-emerald-500 to-emerald-700' },
-  { to: '/blog', titleKey: 'home.card.about', descKey: 'home.card.aboutDesc', icon: Newspaper, gradient: 'from-rose-500 to-rose-700' },
   { to: '/about', titleKey: 'home.card.about', descKey: 'home.card.aboutDesc', icon: Sparkles, gradient: 'from-violet-500 to-violet-700' },
 ];
 
@@ -26,6 +22,129 @@ const testimonials = [
   { name: 'David K.', text: 'The free courses are incredibly well-made. I have grown so much in my understanding of Scripture.', role: 'Bible Study Leader' },
   { name: 'Grace L.', text: 'The community chat connects me with believers from around the world. It feels like a global family.', role: 'Active Member' },
 ];
+
+const RADIO_STATIONS = [
+  { name: 'K-LOVE', url: 'https://maestro.emfcdn.com/stream/k-love/tunein/aac' },
+  { name: 'Air1', url: 'https://maestro.emfcdn.com/stream/air1/tunein/aac' },
+];
+
+function RadioCard() {
+  const [currentStation, setCurrentStation] = useState(0);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [error, setError] = useState(false);
+  const [eqBars, setEqBars] = useState([0, 0, 0]);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  useEffect(() => {
+    if (isPlaying) {
+      const interval = setInterval(() => {
+        setEqBars([
+          Math.random() * 100,
+          Math.random() * 100,
+          Math.random() * 100,
+        ]);
+      }, 200);
+      return () => clearInterval(interval);
+    } else {
+      setEqBars([0, 0, 0]);
+    }
+  }, [isPlaying]);
+
+  const togglePlay = async () => {
+    if (!audioRef.current) {
+      audioRef.current = new Audio(RADIO_STATIONS[currentStation].url);
+      audioRef.current.addEventListener('error', () => {
+        setError(true);
+        setIsPlaying(false);
+      });
+    }
+    if (isPlaying) {
+      audioRef.current.pause();
+      setIsPlaying(false);
+    } else {
+      setError(false);
+      audioRef.current.src = RADIO_STATIONS[currentStation].url;
+      try {
+        await audioRef.current.play();
+        setIsPlaying(true);
+      } catch {
+        setError(true);
+      }
+    }
+  };
+
+  const switchStation = (idx: number) => {
+    setCurrentStation(idx);
+    setError(false);
+    if (isPlaying && audioRef.current) {
+      audioRef.current.src = RADIO_STATIONS[idx].url;
+      audioRef.current.play().catch(() => setError(true));
+    }
+  };
+
+  return (
+    <div className="glass-card p-6">
+      <div className="flex items-center gap-3 mb-4">
+        <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-gradient-to-br from-primary-500 to-primary-700">
+          <Radio className="h-6 w-6 text-white" />
+        </div>
+        <div>
+          <h3 className="text-xl font-bold">Grace Radio</h3>
+          <p className="text-sm text-slate-500 dark:text-slate-400">Christian music, 24/7</p>
+        </div>
+      </div>
+
+      {/* Now playing + equalizer */}
+      <div className="flex items-center gap-4 mb-4">
+        <button
+          onClick={togglePlay}
+          className="w-14 h-14 rounded-full bg-gradient-to-br from-primary-600 to-primary-700 text-white flex items-center justify-center shrink-0 hover:scale-105 transition-transform shadow-lg"
+        >
+          {isPlaying ? <Pause className="h-6 w-6" /> : <Play className="h-6 w-6 ml-0.5" />}
+        </button>
+        <div className="flex-1 min-w-0">
+          <p className="font-semibold text-sm truncate">{RADIO_STATIONS[currentStation].name}</p>
+          <p className="text-xs text-slate-500 dark:text-slate-400">{isPlaying ? 'Now playing' : 'Tap play to listen'}</p>
+        </div>
+        {/* 3-bar equalizer */}
+        <div className="flex items-end gap-1 h-8">
+          {eqBars.map((h, i) => (
+            <div
+              key={i}
+              className={`w-1.5 rounded-full transition-all duration-200 ${isPlaying ? 'bg-gradient-to-t from-primary-500 to-gold-500' : 'bg-slate-300 dark:bg-slate-600'}`}
+              style={{ height: isPlaying ? `${Math.max(4, h * 0.3)}px` : '4px' }}
+            />
+          ))}
+        </div>
+      </div>
+
+      {/* Error message */}
+      {error && (
+        <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 text-xs mb-3">
+          <AlertCircle className="h-3.5 w-3.5 shrink-0" />
+          Stream unavailable
+        </div>
+      )}
+
+      {/* Station selector */}
+      <div className="flex gap-2">
+        {RADIO_STATIONS.map((station, idx) => (
+          <button
+            key={station.name}
+            onClick={() => switchStation(idx)}
+            className={`flex-1 py-2.5 rounded-xl text-sm font-medium transition-all ${
+              currentStation === idx
+                ? 'bg-primary-100 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300 border border-primary-300 dark:border-primary-700'
+                : 'glass hover:scale-105'
+            }`}
+          >
+            {station.name}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 export default function Home() {
   const { t, lang } = useLang();
@@ -81,17 +200,29 @@ export default function Home() {
 
   useEffect(() => {
     (async () => {
+      const countRows = async (table: string) => {
+        const { count, error } = await supabase
+          .from(table)
+          .select('*', { count: 'exact', head: true });
+        if (error) {
+          console.error(`Error counting ${table}:`, error);
+          return 0;
+        }
+        return count ?? 0;
+      };
+
       const [users, books, courses, quizzes] = await Promise.all([
-        supabase.from('profiles').select('id', { count: 'exact', head: true }),
-        supabase.from('books').select('id', { count: 'exact', head: true }),
-        supabase.from('courses').select('id', { count: 'exact', head: true }),
-        supabase.from('quiz_results').select('id', { count: 'exact', head: true }),
+        countRows('profiles'),
+        countRows('books'),
+        countRows('courses'),
+        countRows('quiz_results'),
       ]);
+
       setStats({
-        users: (users.count ?? 0) + 1248,
-        books: books.count ?? 0,
-        courses: courses.count ?? 0,
-        quizzes: (quizzes.count ?? 0) + 342,
+        users: users + 1248,
+        books,
+        courses,
+        quizzes: quizzes + 342,
       });
     })();
   }, []);
@@ -105,7 +236,6 @@ export default function Home() {
 
   return (
     <div>
-      {/* Hero */}
       <section className="relative overflow-hidden min-h-[600px] flex items-center">
         <div className="absolute inset-0 bg-gradient-to-br from-primary-900 via-primary-800 to-slate-900 dark:from-slate-950 dark:via-primary-950 dark:to-slate-950" />
         <div className="absolute inset-0 opacity-30">
@@ -130,9 +260,9 @@ export default function Home() {
               {t('home.heroDesc')}
             </p>
             <div className="flex flex-wrap gap-4">
-              <Link to="/verses" className="btn-gold">
-                <BookOpen className="h-4 w-4" />
-                {t('home.readVerse')}
+              <Link to="/posts" className="btn-gold">
+                <LayoutGrid className="h-4 w-4" />
+                Explore Posts
               </Link>
               <Link to="/courses" className="inline-flex items-center justify-center gap-2 rounded-xl bg-white/10 backdrop-blur-md border border-white/20 px-6 py-3 text-sm font-semibold text-white transition-all hover:bg-white/20 hover:scale-[1.02]">
                 {t('home.exploreCourses')}
@@ -141,7 +271,6 @@ export default function Home() {
             </div>
           </motion.div>
 
-          {/* Daily verse card */}
           <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.6, delay: 0.2 }} className="relative">
             {loading || fetchingVerse ? (
               <div className="glass-card p-8 border-white/30">
@@ -169,8 +298,8 @@ export default function Home() {
                 <p className="text-gold-400 font-semibold text-lg">— {verseData.reference}</p>
                 <div className="mt-6 pt-6 border-t border-white/10 flex items-center justify-between">
                   <span className="text-sm text-white/60">{verseCategory}</span>
-                  <Link to="/verses" className="text-sm text-white/80 hover:text-gold-400 flex items-center gap-1 transition-colors">
-                    {t('home.moreVerses')} <ArrowRight className="h-3 w-3" />
+                  <Link to="/posts" className="text-sm text-white/80 hover:text-gold-400 flex items-center gap-1 transition-colors">
+                    View Posts <ArrowRight className="h-3 w-3" />
                   </Link>
                 </div>
               </div>
@@ -179,10 +308,31 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Gospel Radio */}
-      <GospelRadio />
+      <section className="py-12 bg-white dark:bg-slate-900 -mt-1 relative z-10">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            {statItems.map((stat, i) => {
+              const Icon = stat.icon;
+              return (
+                <motion.div key={stat.label} initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ delay: i * 0.1 }} className="glass-card p-6 text-center">
+                  <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-gradient-to-br from-primary-100 to-gold-100 dark:from-primary-900/30 dark:to-gold-900/30 mb-3">
+                    <Icon className="h-6 w-6 text-primary-600 dark:text-primary-400" />
+                  </div>
+                  <p className="text-3xl font-bold gradient-text">{stat.value.toLocaleString()}</p>
+                  <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">{stat.label}</p>
+                </motion.div>
+              );
+            })}
+          </div>
+        </div>
+      </section>
 
-      {/* Navigation cards */}
+      <section className="py-8 bg-white dark:bg-slate-900">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <RadioCard />
+        </div>
+      </section>
+
       <section className="section-padding">
         <div className="container-narrow">
           <motion.div initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} className="text-center mb-12">
@@ -212,7 +362,6 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Testimonials */}
       <section className="section-padding bg-gradient-to-br from-primary-50 to-gold-50 dark:from-slate-900 dark:to-slate-950">
         <div className="container-narrow">
           <motion.div initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} className="text-center mb-12">
@@ -242,7 +391,6 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Newsletter CTA */}
       <section className="section-padding">
         <div className="container-narrow">
           <motion.div initial={{ opacity: 0, scale: 0.95 }} whileInView={{ opacity: 1, scale: 1 }} viewport={{ once: true }} className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-primary-700 to-primary-900 p-8 sm:p-12 text-center">

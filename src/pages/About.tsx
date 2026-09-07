@@ -8,7 +8,6 @@ const tabs = [
   { id: 'about', label: 'About Us', icon: Sparkles },
   { id: 'support', label: 'Support', icon: HelpCircle },
   { id: 'contact', label: 'Contact', icon: Mail },
-  { id: 'donate', label: 'Donate', icon: HandHeart },
 ] as const;
 
 type TabId = (typeof tabs)[number]['id'];
@@ -76,7 +75,6 @@ export default function About() {
             {tab === 'about' && <AboutTab key="about" />}
             {tab === 'support' && <SupportTab key="support" />}
             {tab === 'contact' && <ContactTab key="contact" showToast={showToast} />}
-            {tab === 'donate' && <DonateTab key="donate" showToast={showToast} />}
           </AnimatePresence>
         </div>
       </section>
@@ -335,88 +333,6 @@ function ContactTab({ showToast }: { showToast: (m: string, t?: 'success' | 'err
             <Send className="h-4 w-4" />
           </button>
         </form>
-      </div>
-    </motion.div>
-  );
-}
-
-function DonateTab({ showToast }: { showToast: (m: string, t?: 'success' | 'error' | 'info' | 'warning') => void }) {
-  const [form, setForm] = useState({ name: '', email: '', amount: '', message: '' });
-  const [submitting, setSubmitting] = useState(false);
-
-  const submit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setSubmitting(true);
-    const { error } = await supabase.from('contact_messages').insert({
-      name: form.name,
-      email: form.email,
-      subject: `Donation: ${form.amount}`,
-      message: form.message || `Donation pledge of ${form.amount}`,
-    });
-    setSubmitting(false);
-    if (error) {
-      showToast('Could not submit. Please try again.', 'error');
-    } else {
-      showToast('Thank you for your generosity! We will be in touch.', 'success');
-      setForm({ name: '', email: '', amount: '', message: '' });
-    }
-  };
-
-  const amounts = [10, 25, 50, 100, 250, 500];
-
-  return (
-    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }}>
-      <div className="text-center mb-8">
-        <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br from-rose-400 to-rose-600 mb-4 shadow-lg shadow-rose-500/30">
-          <HandHeart className="h-8 w-8 text-white" />
-        </div>
-        <h2 className="text-2xl font-bold mb-2">Support Our Ministry</h2>
-        <p className="text-slate-500 dark:text-slate-400 max-w-xl mx-auto">
-          Your donation helps us keep all resources free and reach more believers worldwide with the Gospel.
-        </p>
-      </div>
-
-      <div className="glass-card p-6 mb-6">
-        <h3 className="font-bold mb-4">Quick Give</h3>
-        <div className="grid grid-cols-3 gap-3 mb-4">
-          {amounts.map((amt) => (
-            <button
-              key={amt}
-              onClick={() => setForm({ ...form, amount: amt.toString() })}
-              className={`py-3 rounded-xl font-bold transition-all ${form.amount === amt.toString() ? 'bg-gradient-to-r from-primary-600 to-primary-700 text-white shadow-lg scale-105' : 'glass hover:scale-105'}`}
-            >
-              ${amt}
-            </button>
-          ))}
-        </div>
-        <form onSubmit={submit} className="space-y-3">
-          <div className="grid sm:grid-cols-2 gap-3">
-            <input required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Your name" className="input-field" />
-            <input required type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} placeholder="Your email" className="input-field" />
-          </div>
-          <div className="relative">
-            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 font-bold">$</span>
-            <input required type="number" min="1" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} placeholder="Custom amount" className="input-field pl-8" />
-          </div>
-          <textarea value={form.message} onChange={(e) => setForm({ ...form, message: e.target.value })} placeholder="Message (optional)" className="input-field min-h-[80px]" />
-          <button type="submit" disabled={submitting} className="btn-primary w-full">
-            {submitting ? 'Processing...' : 'Pledge Donation'}
-            <HandHeart className="h-4 w-4" />
-          </button>
-        </form>
-      </div>
-
-      <div className="grid sm:grid-cols-3 gap-4">
-        {[
-          { title: 'Free Resources', desc: 'Keep books, courses, and verses free for all' },
-          { title: 'Global Reach', desc: 'Reach believers in every nation with the Gospel' },
-          { title: 'Community', desc: 'Maintain safe chat and community spaces' },
-        ].map((item) => (
-          <div key={item.title} className="glass-card p-5 text-center">
-            <h3 className="font-semibold text-sm mb-1">{item.title}</h3>
-            <p className="text-xs text-slate-500 dark:text-slate-400">{item.desc}</p>
-          </div>
-        ))}
       </div>
     </motion.div>
   );

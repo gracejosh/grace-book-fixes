@@ -1,19 +1,20 @@
 import { useEffect, useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { supabase, uploadToCloudinary } from '@/lib/supabase';
+import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/context/ToastContext';
-import type { BibleVerse, Book, Course, Quiz as QuizType, Profile, PrayerRequest, ContactMessage, NewsletterSubscriber, Post, Ad, Message, ChatRoom } from '@/types';
+import { UploadButton } from '@/components/UploadButton';
+import type { Book, Course, Quiz as QuizType, Profile, PrayerRequest, ContactMessage, NewsletterSubscriber, Post, Ad, Message, ChatRoom, Flyer, Blog } from '@/types';
 import {
-  Lock, LayoutDashboard, BookOpen, Library, GraduationCap, BrainCircuit, Users, Mail,
+  Lock, LayoutDashboard, Library, GraduationCap, BrainCircuit, Users, Mail,
   Plus, Edit2, Trash2, X, Download, TrendingUp, Award, MessageSquare, Heart, FileText,
   Megaphone, Image as ImageIcon, Ban, VolumeX, Volume2, Trash, BarChart3, LayoutGrid,
-  Loader, Link2,
+  Link2, Search, Eye, CheckCircle, XCircle, Newspaper,
 } from 'lucide-react';
 import { EmptyState } from '@/components/ui';
 
 const ADMIN_PASSWORD = 'grace2024';
-type Tab = 'dashboard' | 'verses' | 'books' | 'courses' | 'quizzes' | 'posts' | 'users' | 'chat' | 'ads' | 'messages';
+type Tab = 'dashboard' | 'books' | 'courses' | 'quizzes' | 'posts' | 'users' | 'chat' | 'ads' | 'messages' | 'flyers' | 'blogs';
 
 export default function Admin() {
   const { profile } = useAuth();
@@ -56,11 +57,12 @@ export default function Admin() {
 
   const tabs: { id: Tab; label: string; icon: typeof LayoutDashboard }[] = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-    { id: 'verses', label: 'Verses', icon: BookOpen },
     { id: 'books', label: 'Books', icon: Library },
     { id: 'courses', label: 'Courses', icon: GraduationCap },
     { id: 'quizzes', label: 'Quizzes', icon: BrainCircuit },
     { id: 'posts', label: 'Posts', icon: LayoutGrid },
+    { id: 'flyers', label: 'Flyers', icon: ImageIcon },
+    { id: 'blogs', label: 'Blogs', icon: Newspaper },
     { id: 'users', label: 'Users', icon: Users },
     { id: 'chat', label: 'Chat Control', icon: MessageSquare },
     { id: 'ads', label: 'Ads', icon: Megaphone },
@@ -97,11 +99,12 @@ export default function Admin() {
         </div>
 
         {tab === 'dashboard' && <DashboardTab />}
-        {tab === 'verses' && <VersesTab showToast={showToast} />}
         {tab === 'books' && <BooksTab showToast={showToast} />}
         {tab === 'courses' && <CoursesTab showToast={showToast} />}
         {tab === 'quizzes' && <QuizzesTab showToast={showToast} />}
         {tab === 'posts' && <PostsTab showToast={showToast} />}
+        {tab === 'flyers' && <FlyersTab showToast={showToast} />}
+        {tab === 'blogs' && <BlogsTab showToast={showToast} />}
         {tab === 'users' && <UsersTab showToast={showToast} />}
         {tab === 'chat' && <ChatControlTab showToast={showToast} />}
         {tab === 'ads' && <AdsTab showToast={showToast} />}
@@ -114,34 +117,35 @@ export default function Admin() {
 /* ==================== Dashboard ==================== */
 
 function DashboardTab() {
-  const [stats, setStats] = useState({ users: 0, books: 0, downloads: 0, quizzes: 0, messages: 0, verses: 0, courses: 0, posts: 0, postDownloads: 0 });
+  const [stats, setStats] = useState({ users: 0, books: 0, downloads: 0, quizzes: 0, messages: 0, courses: 0, posts: 0, postDownloads: 0, flyers: 0, blogs: 0 });
   const [recent, setRecent] = useState<{ id: string; score: number; category: string; created_at: string }[]>([]);
   const [liveUsers, setLiveUsers] = useState(0);
 
   useEffect(() => {
     (async () => {
-      const [u, b, dl, q, m, v, c, p, pd] = await Promise.all([
+      const [u, b, dl, q, m, c, p, pd, fl, bl] = await Promise.all([
         supabase.from('profiles').select('id', { count: 'exact', head: true }),
         supabase.from('books').select('id', { count: 'exact', head: true }),
         supabase.from('book_downloads').select('id', { count: 'exact', head: true }),
         supabase.from('quiz_results').select('id', { count: 'exact', head: true }),
         supabase.from('messages').select('id', { count: 'exact', head: true }),
-        supabase.from('bible_verses').select('id', { count: 'exact', head: true }),
         supabase.from('courses').select('id', { count: 'exact', head: true }),
         supabase.from('posts').select('id', { count: 'exact', head: true }),
         supabase.from('post_downloads').select('id', { count: 'exact', head: true }),
+        supabase.from('flyers').select('id', { count: 'exact', head: true }),
+        supabase.from('blogs').select('id', { count: 'exact', head: true }),
       ]);
       setStats({
         users: u.count ?? 0, books: b.count ?? 0, downloads: dl.count ?? 0,
-        quizzes: q.count ?? 0, messages: m.count ?? 0, verses: v.count ?? 0,
+        quizzes: q.count ?? 0, messages: m.count ?? 0,
         courses: c.count ?? 0, posts: p.count ?? 0, postDownloads: pd.count ?? 0,
+        flyers: fl.count ?? 0, blogs: bl.count ?? 0,
       });
       const { data } = await supabase.from('quiz_results').select('id, score, category, created_at').order('created_at', { ascending: false }).limit(5);
       setRecent((data as { id: string; score: number; category: string; created_at: string }[]) ?? []);
     })();
   }, []);
 
-  // Live user count — refresh every 10 seconds
   useEffect(() => {
     const fetchLive = async () => {
       const { count } = await supabase.from('profiles').select('id', { count: 'exact', head: true });
@@ -157,9 +161,10 @@ function DashboardTab() {
     { label: 'Books Downloaded', value: stats.downloads, icon: Download, color: 'from-gold-400 to-gold-600' },
     { label: 'Quiz Attempts', value: stats.quizzes, icon: Award, color: 'from-rose-500 to-rose-700' },
     { label: 'Messages Sent', value: stats.messages, icon: MessageSquare, color: 'from-accent-500 to-accent-700' },
-    { label: 'Bible Verses', value: stats.verses, icon: BookOpen, color: 'from-emerald-500 to-emerald-700' },
     { label: 'Courses', value: stats.courses, icon: GraduationCap, color: 'from-violet-500 to-violet-700' },
     { label: 'Community Posts', value: stats.posts, icon: LayoutGrid, color: 'from-teal-500 to-teal-700' },
+    { label: 'Flyers', value: stats.flyers, icon: ImageIcon, color: 'from-cyan-500 to-cyan-700' },
+    { label: 'Blogs', value: stats.blogs, icon: Newspaper, color: 'from-indigo-500 to-indigo-700' },
     { label: 'Post Downloads', value: stats.postDownloads, icon: Download, color: 'from-orange-500 to-orange-700' },
   ];
 
@@ -258,77 +263,6 @@ function FormModal({ show, onClose, title, onSave, children }: {
   );
 }
 
-/* ==================== Verses Tab ==================== */
-
-function VersesTab({ showToast }: { showToast: (m: string, t?: 'success' | 'error' | 'info' | 'warning') => void }) {
-  const [items, setItems] = useState<BibleVerse[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [editing, setEditing] = useState<BibleVerse | null>(null);
-  const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState({ verse_text: '', reference: '', category: 'Faith', verse_date: '' });
-
-  const load = async () => {
-    const { data } = await supabase.from('bible_verses').select('*').order('created_at', { ascending: false });
-    setItems((data as BibleVerse[]) ?? []);
-    setLoading(false);
-  };
-  useEffect(() => { load(); }, []);
-
-  const save = async () => {
-    if (editing) {
-      await supabase.from('bible_verses').update(form).eq('id', editing.id);
-    } else {
-      await supabase.from('bible_verses').insert({ ...form, verse_date: form.verse_date || null });
-    }
-    showToast(editing ? 'Verse updated' : 'Verse added', 'success');
-    setShowForm(false); setEditing(null); setForm({ verse_text: '', reference: '', category: 'Faith', verse_date: '' });
-    load();
-  };
-
-  const del = async (id: string) => {
-    if (!confirm('Delete this verse?')) return;
-    await supabase.from('bible_verses').delete().eq('id', id);
-    showToast('Verse deleted', 'info');
-    load();
-  };
-
-  const edit = (v: BibleVerse) => {
-    setEditing(v);
-    setForm({ verse_text: v.verse_text, reference: v.reference, category: v.category, verse_date: v.verse_date ?? '' });
-    setShowForm(true);
-  };
-
-  return (
-    <div>
-      <CrudHeader title="Bible Verses" onAdd={() => { setEditing(null); setForm({ verse_text: '', reference: '', category: 'Faith', verse_date: '' }); setShowForm(true); }} />
-      {loading ? <div className="skeleton h-64 rounded-xl" /> : (
-        <div className="space-y-2">
-          {items.map((v) => (
-            <div key={v.id} className="glass-card p-4 flex items-start justify-between gap-4">
-              <div className="flex-1">
-                <p className="text-sm italic mb-1">"{v.verse_text}"</p>
-                <p className="text-gold-600 dark:text-gold-400 text-sm font-semibold">— {v.reference} · <span className="text-xs text-slate-500">{v.category}</span></p>
-              </div>
-              <div className="flex gap-1">
-                <button onClick={() => edit(v)} className="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700"><Edit2 className="h-4 w-4 text-slate-400" /></button>
-                <button onClick={() => del(v.id)} className="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700"><Trash2 className="h-4 w-4 text-red-400" /></button>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-      <FormModal show={showForm} onClose={() => setShowForm(false)} title={editing ? 'Edit Verse' : 'Add Verse'} onSave={save}>
-        <textarea value={form.verse_text} onChange={(e) => setForm({ ...form, verse_text: e.target.value })} placeholder="Verse text" className="input-field min-h-[80px]" />
-        <input value={form.reference} onChange={(e) => setForm({ ...form, reference: e.target.value })} placeholder="Reference (e.g. John 3:16)" className="input-field" />
-        <select value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} className="input-field">
-          {['Salvation', 'Strength', 'Comfort', 'Faith', 'Love', 'Hope'].map((c) => <option key={c}>{c}</option>)}
-        </select>
-        <input type="date" value={form.verse_date} onChange={(e) => setForm({ ...form, verse_date: e.target.value })} className="input-field" />
-      </FormModal>
-    </div>
-  );
-}
-
 /* ==================== Books Tab ==================== */
 
 function BooksTab({ showToast }: { showToast: (m: string, t?: 'success' | 'error' | 'info' | 'warning') => void }) {
@@ -337,7 +271,6 @@ function BooksTab({ showToast }: { showToast: (m: string, t?: 'success' | 'error
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<Book | null>(null);
   const [form, setForm] = useState({ title: '', author: '', description: '', cloudinary_url: '', cover_url: '', category: 'General', file_format: 'PDF' });
-  const [uploading, setUploading] = useState(false);
 
   const load = async () => {
     const { data } = await supabase.from('books').select('*').order('created_at', { ascending: false });
@@ -345,18 +278,6 @@ function BooksTab({ showToast }: { showToast: (m: string, t?: 'success' | 'error
     setLoading(false);
   };
   useEffect(() => { load(); }, []);
-
-  const uploadFile = async (e: React.ChangeEvent<HTMLInputElement>, field: 'cloudinary_url' | 'cover_url') => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setUploading(true);
-    try {
-      const url = await uploadToCloudinary(file, field === 'cover_url' ? 'image' : 'raw');
-      setForm((prev) => ({ ...prev, [field]: url }));
-      showToast('File uploaded', 'success');
-    } catch { showToast('Upload failed', 'error'); }
-    setUploading(false);
-  };
 
   const save = async () => {
     if (editing) {
@@ -391,6 +312,7 @@ function BooksTab({ showToast }: { showToast: (m: string, t?: 'success' | 'error
                   <button onClick={() => del(b.id)} className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700"><Trash2 className="h-3.5 w-3.5 text-red-400" /></button>
                 </div>
               </div>
+              {b.cover_url && <img src={b.cover_url} alt="" className="w-full h-32 object-cover rounded-lg mb-2" />}
               <p className="text-xs text-slate-500">by {b.author} · {b.category} · {b.file_format}</p>
             </div>
           ))}
@@ -406,13 +328,23 @@ function BooksTab({ showToast }: { showToast: (m: string, t?: 'success' | 'error
         <select value={form.file_format} onChange={(e) => setForm({ ...form, file_format: e.target.value })} className="input-field">
           {['PDF', 'EPUB', 'MOBI', 'AZW'].map((c) => <option key={c}>{c}</option>)}
         </select>
-        <label className="text-sm font-medium">Book File</label>
-        <input type="file" onChange={(e) => uploadFile(e, 'cloudinary_url')} className="input-field" />
-        {form.cloudinary_url && <p className="text-xs text-emerald-500">File uploaded</p>}
         <label className="text-sm font-medium">Cover Image</label>
-        <input type="file" accept="image/*" onChange={(e) => uploadFile(e, 'cover_url')} className="input-field" />
-        {form.cover_url && <p className="text-xs text-emerald-500">Cover uploaded</p>}
-        {uploading && <p className="text-xs text-amber-500">Uploading...</p>}
+        <UploadButton
+          label="Upload Cover Image"
+          accept="image/*"
+          resourceType="image"
+          currentUrl={form.cover_url}
+          onUploaded={(url) => setForm((prev) => ({ ...prev, cover_url: url }))}
+        />
+        {form.cover_url && <img src={form.cover_url} alt="Cover preview" className="rounded-xl max-h-32 object-cover" />}
+        <label className="text-sm font-medium">Book File (PDF / EPUB)</label>
+        <UploadButton
+          label="Upload Book File"
+          accept=".pdf,.epub"
+          resourceType="raw"
+          currentUrl={form.cloudinary_url}
+          onUploaded={(url) => setForm((prev) => ({ ...prev, cloudinary_url: url }))}
+        />
       </FormModal>
     </div>
   );
@@ -569,6 +501,9 @@ function QuizzesTab({ showToast }: { showToast: (m: string, t?: 'success' | 'err
 function PostsTab({ showToast }: { showToast: (m: string, t?: 'success' | 'error' | 'info' | 'warning') => void }) {
   const [items, setItems] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
+  const [editing, setEditing] = useState<Post | null>(null);
+  const [showForm, setShowForm] = useState(false);
+  const [form, setForm] = useState({ title: '', content: '', type: 'text' as Post['type'], media_url: '', file_name: '', file_size: 0 });
 
   const load = async () => {
     const { data } = await supabase.from('posts').select('*').order('created_at', { ascending: false });
@@ -582,6 +517,21 @@ function PostsTab({ showToast }: { showToast: (m: string, t?: 'success' | 'error
     const { error } = await supabase.from('posts').delete().eq('id', id);
     if (error) { showToast('Could not delete post', 'error'); return; }
     showToast('Post deleted', 'info');
+    load();
+  };
+
+  const edit = (p: Post) => {
+    setEditing(p);
+    setForm({ title: p.title ?? '', content: p.content ?? '', type: p.type, media_url: p.media_url ?? '', file_name: p.file_name ?? '', file_size: p.file_size ?? 0 });
+    setShowForm(true);
+  };
+
+  const save = async () => {
+    if (!editing) return;
+    const { error } = await supabase.from('posts').update({ title: form.title, content: form.content, type: form.type, media_url: form.media_url || null, file_name: form.file_name || null, file_size: form.file_size || null }).eq('id', editing.id);
+    if (error) { showToast('Could not update post', 'error'); return; }
+    showToast('Post updated', 'success');
+    setShowForm(false); setEditing(null);
     load();
   };
 
@@ -616,18 +566,47 @@ function PostsTab({ showToast }: { showToast: (m: string, t?: 'success' | 'error
                   <span>{new Date(p.created_at).toLocaleDateString()}</span>
                 </div>
               </div>
-              <button onClick={() => del(p.id)} className="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 shrink-0">
-                <Trash2 className="h-4 w-4 text-red-400" />
-              </button>
+              <div className="flex gap-1 shrink-0">
+                <button onClick={() => edit(p)} className="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700" title="Edit">
+                  <Edit2 className="h-4 w-4 text-slate-400" />
+                </button>
+                <button onClick={() => del(p.id)} className="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700" title="Delete">
+                  <Trash2 className="h-4 w-4 text-red-400" />
+                </button>
+              </div>
             </div>
           ))}
         </div>
       )}
+      <FormModal show={showForm} onClose={() => setShowForm(false)} title="Edit Post" onSave={save}>
+        <input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} placeholder="Title" className="input-field" />
+        <textarea value={form.content} onChange={(e) => setForm({ ...form, content: e.target.value })} placeholder="Content" className="input-field min-h-[120px]" />
+        <select value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value as Post['type'], media_url: '', file_name: '', file_size: 0 })} className="input-field">
+          <option value="text">Text</option>
+          <option value="image">Image</option>
+          <option value="pdf">PDF</option>
+          <option value="audio">Audio</option>
+        </select>
+        {form.type !== 'text' && (
+          <>
+            <label className="text-sm font-medium">
+              Upload {form.type === 'image' ? 'Image' : form.type === 'pdf' ? 'PDF' : 'Audio'}
+            </label>
+            <UploadButton
+              label={`Upload ${form.type.toUpperCase()}`}
+              accept={form.type === 'image' ? 'image/*' : form.type === 'pdf' ? '.pdf' : 'audio/*'}
+              resourceType={form.type === 'image' ? 'image' : form.type === 'pdf' ? 'raw' : 'raw'}
+              currentUrl={form.media_url}
+              onUploaded={(url) => setForm((prev) => ({ ...prev, media_url: url }))}
+            />
+          </>
+        )}
+      </FormModal>
     </div>
   );
 }
 
-/* ==================== Enhanced Users Tab ==================== */
+/* ==================== Users Tab ==================== */
 
 function UsersTab({ showToast }: { showToast: (m: string, t?: 'success' | 'error' | 'info' | 'warning') => void }) {
   const [users, setUsers] = useState<Profile[]>([]);
@@ -765,7 +744,6 @@ function ChatControlTab({ showToast }: { showToast: (m: string, t?: 'success' | 
         <MessageSquare className="h-5 w-5 text-primary-600" /> Chat Control
       </h2>
       <div className="grid lg:grid-cols-3 gap-4">
-        {/* Rooms sidebar */}
         <div className="glass-card p-4">
           <h3 className="font-semibold text-sm mb-3">Chat Rooms ({rooms.length})</h3>
           <div className="space-y-1 max-h-96 overflow-y-auto scrollbar-thin">
@@ -787,7 +765,6 @@ function ChatControlTab({ showToast }: { showToast: (m: string, t?: 'success' | 
           </div>
         </div>
 
-        {/* Messages */}
         <div className="lg:col-span-2 glass-card p-4">
           {selectedRoom ? (
             <>
@@ -846,7 +823,6 @@ function AdsTab({ showToast }: { showToast: (m: string, t?: 'success' | 'error' 
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<Ad | null>(null);
   const [form, setForm] = useState({ title: '', image_url: '', link_url: '', interval_minutes: 30, is_active: true });
-  const [uploading, setUploading] = useState(false);
 
   const load = async () => {
     const { data } = await supabase.from('ads').select('*').order('created_at', { ascending: false });
@@ -854,18 +830,6 @@ function AdsTab({ showToast }: { showToast: (m: string, t?: 'success' | 'error' 
     setLoading(false);
   };
   useEffect(() => { load(); }, []);
-
-  const uploadImage = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setUploading(true);
-    try {
-      const url = await uploadToCloudinary(file, 'image');
-      setForm((prev) => ({ ...prev, image_url: url }));
-      showToast('Image uploaded', 'success');
-    } catch { showToast('Upload failed', 'error'); }
-    setUploading(false);
-  };
 
   const save = async () => {
     if (!form.title || !form.image_url || !form.link_url) {
@@ -927,10 +891,15 @@ function AdsTab({ showToast }: { showToast: (m: string, t?: 'success' | 'error' 
       )}
       <FormModal show={showForm} onClose={() => setShowForm(false)} title={editing ? 'Edit Ad' : 'Create Ad'} onSave={save}>
         <input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} placeholder="Ad title" className="input-field" />
-        <label className="text-sm font-medium">Ad Image</label>
-        <input type="file" accept="image/*" onChange={uploadImage} className="input-field" disabled={uploading} />
+        <label className="text-sm font-medium">Ad Image or Video</label>
+        <UploadButton
+          label="Upload Image or Video"
+          accept="image/*,video/*"
+          resourceType="image"
+          currentUrl={form.image_url}
+          onUploaded={(url) => setForm((prev) => ({ ...prev, image_url: url }))}
+        />
         {form.image_url && <img src={form.image_url} alt="Preview" className="rounded-xl max-h-32 object-cover" />}
-        {uploading && <p className="text-xs text-amber-500 flex items-center gap-1"><Loader className="h-3 w-3 animate-spin" /> Uploading...</p>}
         <input value={form.link_url} onChange={(e) => setForm({ ...form, link_url: e.target.value })} placeholder="Link URL (e.g. https://example.com)" className="input-field" />
         <label className="text-sm font-medium">Display Interval (minutes)</label>
         <input type="number" value={form.interval_minutes} onChange={(e) => setForm({ ...form, interval_minutes: parseInt(e.target.value) || 30 })} min={1} className="input-field" />
@@ -1023,6 +992,412 @@ function MessagesTab() {
           {subscribers.length === 0 && <p className="text-xs text-slate-500 text-center py-4">No subscribers</p>}
         </div>
       </div>
+    </div>
+  );
+}
+
+/* ==================== Flyers Management Tab ==================== */
+
+const FLYER_CATEGORIES = [
+  'Evangelism', 'Salvation', 'Prayer', 'Youth', 'Women', 'Men',
+  'Outreach', 'Events', 'Testimony', 'Other',
+];
+
+function FlyersTab({ showToast }: { showToast: (m: string, t?: 'success' | 'error' | 'info' | 'warning') => void }) {
+  const [items, setItems] = useState<Flyer[]>([]);
+  const [authors, setAuthors] = useState<Record<string, Profile>>({});
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState('');
+  const [category, setCategory] = useState('all');
+  const [viewFlyer, setViewFlyer] = useState<Flyer | null>(null);
+  const [editing, setEditing] = useState<Flyer | null>(null);
+  const [showForm, setShowForm] = useState(false);
+  const [form, setForm] = useState({ title: '', description: '', category: 'Evangelism', images: [] as string[] });
+
+  const load = async () => {
+    const { data } = await supabase.from('flyers').select('*').order('created_at', { ascending: false });
+    const fetched = (data as Flyer[]) ?? [];
+    setItems(fetched);
+    setLoading(false);
+
+    const authorIds = [...new Set(fetched.map((f) => f.user_id).filter(Boolean))] as string[];
+    if (authorIds.length > 0) {
+      const { data: profData } = await supabase.from('profiles').select('*').in('id', authorIds);
+      const map: Record<string, Profile> = {};
+      (profData as Profile[] | null)?.forEach((p) => { map[p.id] = p; });
+      setAuthors(map);
+    }
+  };
+  useEffect(() => { load(); }, []);
+
+  const del = async (id: string) => {
+    if (!confirm('Delete this flyer?')) return;
+    const { error } = await supabase.from('flyers').delete().eq('id', id);
+    if (error) { showToast('Could not delete flyer', 'error'); return; }
+    showToast('Flyer deleted', 'info');
+    load();
+  };
+
+  const toggleApproval = async (flyer: Flyer) => {
+    const { error } = await supabase.from('flyers').update({ is_approved: !flyer.is_approved }).eq('id', flyer.id);
+    if (error) { showToast('Could not update flyer', 'error'); return; }
+    showToast(`Flyer ${flyer.is_approved ? 'hidden' : 'approved'}`, flyer.is_approved ? 'warning' : 'success');
+    load();
+  };
+
+  const edit = (f: Flyer) => {
+    setEditing(f);
+    setForm({ title: f.title ?? '', description: f.description ?? '', category: f.category ?? 'Evangelism', images: f.images ?? [] });
+    setShowForm(true);
+  };
+
+  const save = async () => {
+    if (!editing) return;
+    const { error } = await supabase.from('flyers').update({ title: form.title, description: form.description, category: form.category, images: form.images }).eq('id', editing.id);
+    if (error) { showToast('Could not update flyer', 'error'); return; }
+    showToast('Flyer updated', 'success');
+    setShowForm(false); setEditing(null);
+    load();
+  };
+
+  const addImage = (url: string) => {
+    setForm((prev) => ({ ...prev, images: [...prev.images, url].slice(0, 5) }));
+  };
+
+  const removeImage = (idx: number) => {
+    setForm((prev) => ({ ...prev, images: prev.images.filter((_, i) => i !== idx) }));
+  };
+
+  const filtered = items.filter((f) => {
+    const matchesCat = category === 'all' || f.category === category;
+    const q = search.toLowerCase();
+    const matchesSearch = !search ||
+      (f.title?.toLowerCase().includes(q)) ||
+      (f.description?.toLowerCase().includes(q));
+    return matchesCat && matchesSearch;
+  });
+
+  return (
+    <div>
+      <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
+        <ImageIcon className="h-5 w-5 text-primary-600" /> Flyers ({items.length})
+      </h2>
+
+      <div className="flex flex-col sm:flex-row gap-3 mb-4">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search flyers by title or description..."
+            className="input-field pl-10"
+          />
+        </div>
+        <select value={category} onChange={(e) => setCategory(e.target.value)} className="input-field sm:w-48">
+          <option value="all">All Categories</option>
+          {FLYER_CATEGORIES.map((c) => <option key={c}>{c}</option>)}
+        </select>
+      </div>
+
+      {loading ? (
+        <div className="skeleton h-64 rounded-xl" />
+      ) : filtered.length === 0 ? (
+        <EmptyState icon={<ImageIcon className="h-8 w-8 text-primary-500" />} title="No Flyers" description="No flyers match your search." />
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-left text-xs text-slate-500 border-b border-slate-200 dark:border-slate-700">
+                <th className="py-3 px-2">Flyer</th>
+                <th className="py-3 px-2">Category</th>
+                <th className="py-3 px-2">Author</th>
+                <th className="py-3 px-2">Likes</th>
+                <th className="py-3 px-2">Status</th>
+                <th className="py-3 px-2">Date</th>
+                <th className="py-3 px-2 text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.map((f) => {
+                const author = f.user_id ? authors[f.user_id] : null;
+                return (
+                  <tr key={f.id} className="border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/30">
+                    <td className="py-3 px-2">
+                      <div className="flex items-center gap-2">
+                        {f.images?.[0] && <img src={f.images[0]} alt="" className="w-10 h-10 rounded-lg object-cover shrink-0" />}
+                        <span className="font-medium line-clamp-1 max-w-[200px]">{f.title ?? 'Untitled'}</span>
+                      </div>
+                    </td>
+                    <td className="py-3 px-2">
+                      <span className="text-xs px-2 py-0.5 rounded-lg bg-primary-100 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300">{f.category ?? '—'}</span>
+                    </td>
+                    <td className="py-3 px-2 text-xs">{author?.username ?? 'Unknown'}</td>
+                    <td className="py-3 px-2">
+                      <span className="flex items-center gap-1 text-xs"><Heart className="h-3 w-3 text-red-400" /> {f.likes_count}</span>
+                    </td>
+                    <td className="py-3 px-2">
+                      {f.is_approved ? (
+                        <span className="text-xs px-2 py-0.5 rounded-lg bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 font-medium">Approved</span>
+                      ) : (
+                        <span className="text-xs px-2 py-0.5 rounded-lg bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 font-medium">Hidden</span>
+                      )}
+                    </td>
+                    <td className="py-3 px-2 text-xs text-slate-400">{new Date(f.created_at).toLocaleDateString()}</td>
+                    <td className="py-3 px-2">
+                      <div className="flex items-center justify-end gap-1">
+                        <button onClick={() => setViewFlyer(f)} className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700" title="View details">
+                          <Eye className="h-4 w-4 text-slate-400" />
+                        </button>
+                        <button onClick={() => edit(f)} className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700" title="Edit">
+                          <Edit2 className="h-4 w-4 text-slate-400" />
+                        </button>
+                        <button onClick={() => toggleApproval(f)} className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700" title={f.is_approved ? 'Hide' : 'Approve'}>
+                          {f.is_approved ? <XCircle className="h-4 w-4 text-amber-500" /> : <CheckCircle className="h-4 w-4 text-emerald-500" />}
+                        </button>
+                        <button onClick={() => del(f.id)} className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700" title="Delete">
+                          <Trash2 className="h-4 w-4 text-red-400" />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      <FormModal show={showForm} onClose={() => setShowForm(false)} title="Edit Flyer" onSave={save}>
+        <input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} placeholder="Title" className="input-field" />
+        <textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} placeholder="Description" className="input-field min-h-[100px]" />
+        <select value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} className="input-field">
+          {FLYER_CATEGORIES.map((c) => <option key={c}>{c}</option>)}
+        </select>
+        <label className="text-sm font-medium">Images ({form.images.length}/5)</label>
+        {form.images.length < 5 && (
+          <UploadButton
+            label="Upload Image"
+            accept="image/*"
+            resourceType="image"
+            onUploaded={addImage}
+          />
+        )}
+        {form.images.length > 0 && (
+          <div className="grid grid-cols-3 gap-2">
+            {form.images.map((url, idx) => (
+              <div key={idx} className="relative group">
+                <img src={url} alt={`Image ${idx + 1}`} className="w-full h-24 object-cover rounded-lg" />
+                <button
+                  type="button"
+                  onClick={() => removeImage(idx)}
+                  className="absolute top-1 right-1 p-1 rounded-lg bg-red-500 text-white opacity-0 group-hover:opacity-100 transition-opacity"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </FormModal>
+
+      <AnimatePresence>
+        {viewFlyer && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setViewFlyer(null)}
+            className="fixed inset-0 z-[9999] bg-black/50 backdrop-blur-sm flex items-center justify-center p-4"
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              onClick={(e) => e.stopPropagation()}
+              className="glass-card p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto scrollbar-thin"
+            >
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-xl font-bold">Flyer Details</h3>
+                <button onClick={() => setViewFlyer(null)} className="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700">
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+              <div className="space-y-3">
+                <div>
+                  <p className="text-xs text-slate-500 font-medium">Title</p>
+                  <p className="font-semibold">{viewFlyer.title ?? 'Untitled'}</p>
+                </div>
+                {viewFlyer.description && (
+                  <div>
+                    <p className="text-xs text-slate-500 font-medium">Description</p>
+                    <p className="text-sm">{viewFlyer.description}</p>
+                  </div>
+                )}
+                <div className="flex gap-4 text-sm">
+                  <div>
+                    <p className="text-xs text-slate-500 font-medium">Category</p>
+                    <p>{viewFlyer.category ?? '—'}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-slate-500 font-medium">Likes</p>
+                    <p className="flex items-center gap-1"><Heart className="h-3 w-3 text-red-400" /> {viewFlyer.likes_count}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-slate-500 font-medium">Author</p>
+                    <p>{viewFlyer.user_id ? authors[viewFlyer.user_id]?.username ?? 'Unknown' : 'Unknown'}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-slate-500 font-medium">Status</p>
+                    <p>{viewFlyer.is_approved ? 'Approved' : 'Hidden'}</p>
+                  </div>
+                </div>
+                {viewFlyer.images?.length > 0 && (
+                  <div>
+                    <p className="text-xs text-slate-500 font-medium mb-2">Images ({viewFlyer.images.length})</p>
+                    <div className="grid grid-cols-3 gap-2">
+                      {viewFlyer.images.map((url, idx) => (
+                        <img key={idx} src={url} alt={`Flyer image ${idx + 1}`} className="w-full h-32 object-cover rounded-lg" />
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
+/* ==================== Blogs Management Tab ==================== */
+
+const BLOG_CATEGORIES = [
+  'Theology', 'Devotional', 'Testimony', 'Teaching', 'News', 'Other',
+];
+
+function BlogsTab({ showToast }: { showToast: (m: string, t?: 'success' | 'error' | 'info' | 'warning') => void }) {
+  const [items, setItems] = useState<Blog[]>([]);
+  const [authors, setAuthors] = useState<Record<string, Profile>>({});
+  const [loading, setLoading] = useState(true);
+  const [editing, setEditing] = useState<Blog | null>(null);
+  const [showForm, setShowForm] = useState(false);
+  const [form, setForm] = useState({ title: '', content: '', category: 'Theology', tags: '', image_url: '' });
+
+  const load = async () => {
+    const { data } = await supabase.from('blogs').select('*').order('created_at', { ascending: false });
+    const fetched = (data as Blog[]) ?? [];
+    setItems(fetched);
+    setLoading(false);
+
+    const authorIds = [...new Set(fetched.map((b) => b.user_id).filter(Boolean))] as string[];
+    if (authorIds.length > 0) {
+      const { data: profData } = await supabase.from('profiles').select('*').in('id', authorIds);
+      const map: Record<string, Profile> = {};
+      (profData as Profile[] | null)?.forEach((p) => { map[p.id] = p; });
+      setAuthors(map);
+    }
+  };
+  useEffect(() => { load(); }, []);
+
+  const del = async (id: string) => {
+    if (!confirm('Delete this blog post?')) return;
+    const { error } = await supabase.from('blogs').delete().eq('id', id);
+    if (error) { showToast('Could not delete blog', 'error'); return; }
+    showToast('Blog deleted', 'info');
+    load();
+  };
+
+  const edit = (b: Blog) => {
+    setEditing(b);
+    setForm({
+      title: b.title ?? '',
+      content: b.content ?? '',
+      category: b.category ?? 'Theology',
+      tags: (b.tags ?? []).join(', '),
+      image_url: b.image_url ?? '',
+    });
+    setShowForm(true);
+  };
+
+  const save = async () => {
+    if (!editing) return;
+    const tagsArray = form.tags.split(',').map((t) => t.trim()).filter(Boolean);
+    const { error } = await supabase.from('blogs').update({
+      title: form.title,
+      content: form.content,
+      category: form.category,
+      tags: tagsArray.length > 0 ? tagsArray : null,
+      image_url: form.image_url || null,
+    }).eq('id', editing.id);
+    if (error) { showToast('Could not update blog', 'error'); return; }
+    showToast('Blog updated', 'success');
+    setShowForm(false); setEditing(null);
+    load();
+  };
+
+  return (
+    <div>
+      <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
+        <Newspaper className="h-5 w-5 text-primary-600" /> Blogs ({items.length})
+      </h2>
+      {loading ? (
+        <div className="skeleton h-64 rounded-xl" />
+      ) : items.length === 0 ? (
+        <EmptyState icon={<Newspaper className="h-8 w-8 text-primary-500" />} title="No Blogs" description="No blog posts have been created yet." />
+      ) : (
+        <div className="space-y-2">
+          {items.map((b) => {
+            const author = b.user_id ? authors[b.user_id] : null;
+            return (
+              <div key={b.id} className="glass-card p-4 flex items-start justify-between gap-4">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-1">
+                    {b.image_url && <img src={b.image_url} alt="" className="w-10 h-10 rounded-lg object-cover shrink-0" />}
+                    <span className="font-semibold text-sm line-clamp-1">{b.title ?? 'Untitled'}</span>
+                  </div>
+                  {b.content && <p className="text-xs text-slate-500 line-clamp-2">{b.content}</p>}
+                  <div className="flex items-center gap-3 mt-1 text-xs text-slate-400 flex-wrap">
+                    <span>{author?.username ?? 'Unknown'}</span>
+                    {b.category && <span className="px-2 py-0.5 rounded-lg bg-primary-100 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300">{b.category}</span>}
+                    {b.tags && b.tags.length > 0 && b.tags.map((tag) => (
+                      <span key={tag} className="px-2 py-0.5 rounded-lg bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300">#{tag}</span>
+                    ))}
+                    <span className="flex items-center gap-1"><Heart className="h-3 w-3 text-red-400" /> {b.likes_count}</span>
+                    <span>{new Date(b.created_at).toLocaleDateString()}</span>
+                  </div>
+                </div>
+                <div className="flex gap-1 shrink-0">
+                  <button onClick={() => edit(b)} className="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700" title="Edit">
+                    <Edit2 className="h-4 w-4 text-slate-400" />
+                  </button>
+                  <button onClick={() => del(b.id)} className="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700" title="Delete">
+                    <Trash2 className="h-4 w-4 text-red-400" />
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+      <FormModal show={showForm} onClose={() => setShowForm(false)} title="Edit Blog" onSave={save}>
+        <input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} placeholder="Title" className="input-field" />
+        <textarea value={form.content} onChange={(e) => setForm({ ...form, content: e.target.value })} placeholder="Content" className="input-field min-h-[140px]" />
+        <select value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} className="input-field">
+          {BLOG_CATEGORIES.map((c) => <option key={c}>{c}</option>)}
+        </select>
+        <input value={form.tags} onChange={(e) => setForm({ ...form, tags: e.target.value })} placeholder="Tags (comma-separated, e.g. faith, prayer, healing)" className="input-field" />
+        <label className="text-sm font-medium">Cover Image</label>
+        <UploadButton
+          label="Upload Cover Image"
+          accept="image/*"
+          resourceType="image"
+          currentUrl={form.image_url}
+          onUploaded={(url) => setForm((prev) => ({ ...prev, image_url: url }))}
+        />
+        {form.image_url && <img src={form.image_url} alt="Cover preview" className="rounded-xl max-h-32 object-cover" />}
+      </FormModal>
     </div>
   );
 }

@@ -77,11 +77,17 @@
     -ms-overflow-style: none;
     scrollbar-width: none;
   }
-  .safe-area-pb {
-    padding-bottom: env(safe-area-inset-bottom, 0px);
-  }
 }
 
 html {
   scroll-behavior: smooth;
+}
+
+/* Marquee */
+@keyframes marquee {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+.marquee-track {
+  animation: marquee 30s linear infinite;
 }

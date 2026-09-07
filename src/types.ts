@@ -82,6 +82,7 @@ export interface Message {
   content: string;
   attachment_url: string | null;
   reply_to: string | null;
+  is_read: boolean;
   created_at: string;
 }
 
@@ -139,9 +140,52 @@ export interface ContactMessage {
   created_at: string;
 }
 
-export interface LiveChatMessage {
+export type PostType = 'text' | 'image' | 'pdf' | 'audio';
+
+export interface Post {
   id: string;
-  author: string;
-  text: string;
-  createdAt: string;
+  user_id: string | null;
+  type: PostType;
+  title: string | null;
+  content: string | null;
+  media_url: string | null;
+  file_name: string | null;
+  file_size: number | null;
+  likes_count: number;
+  downloads_count: number;
+  created_at: string;
+}
+
+export interface Flyer {
+  id: string;
+  user_id: string | null;
+  title: string | null;
+  description: string | null;
+  images: string[];
+  category: string | null;
+  likes_count: number;
+  is_approved: boolean;
+  created_at: string;
+}
+
+export interface Blog {
+  id: string;
+  user_id: string | null;
+  title: string | null;
+  content: string | null;
+  image_url: string | null;
+  category: string | null;
+  tags: string[] | null;
+  likes_count: number;
+  created_at: string;
+}
+
+export interface Ad {
+  id: string;
+  title: string;
+  image_url: string;
+  link_url: string;
+  interval_minutes: number;
+  is_active: boolean;
+  created_at: string;
 }

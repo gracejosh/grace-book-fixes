@@ -6,7 +6,6 @@ import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/context/ToastContext';
 import type { Blog, Profile } from '@/types';
 import { EmptyState } from '@/components/ui';
-import { ExpandableText } from '@/components/ExpandableText';
 
 export default function Blogs() {
   const [blogs, setBlogs] = useState<Blog[]>([]);
@@ -109,7 +108,7 @@ export default function Blogs() {
                       ))}
                     </div>
                   )}
-                  <ExpandableText text={b.content ?? ''} maxLines={3} className="mb-2" />
+                  <p className="text-sm text-slate-500 dark:text-slate-400 line-clamp-3">{b.content}</p>
                   <button
                     onClick={() => toggleLike(b)}
                     className="flex items-center gap-1.5 mt-3 text-sm text-slate-500 hover:text-red-500 transition-colors"
