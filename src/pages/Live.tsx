@@ -6,27 +6,52 @@ import {
   Loader, ArrowLeft, Users, Eye,
 } from 'lucide-react';
 import {
-  MeetingProvider, useMeeting, useParticipant, VideoPlayer,
+  MeetingProvider, useMeeting, VideoPlayer,
 } from '@videosdk.live/react-sdk';
 import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/context/ToastContext';
 import { EmptyState } from '@/components/ui';
 
-async function fetchVideoSDKToken(): Promise<string | null> {
-  try {
-    const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/videosdk-token`;
-    const res = await fetch(apiUrl, {
-      headers: {
-        Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
-        'Content-Type': 'application/json',
-      },
-    });
-    if (!res.ok) return null;
-    const data = await res.json();
-    return data?.token ?? null;
-  } catch {
-    return null;
-  }
+const VIDEOSDK_API_KEY = 'f33a14df787965f1968c1beb9ab108a583ddca1aede08b77316f22357babc2d7';
+const VIDEOSDK_SECRET = '1ac6c5d87c526233375ac4c3dea6d142b9805deb9648d46c5a1018d685e8576c';
+
+function base64UrlEncodeString(str: string): string {
+  return btoa(str).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
+async function base64UrlEncode(data: ArrayBuffer): Promise<string> {
+  const bytes = new Uint8Array(data);
+  let binary = '';
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
+async function generateVideoSDKToken(): Promise<string> {
+  const header = { alg: 'HS256', typ: 'JWT' };
+  const now = Math.floor(Date.now() / 1000);
+  const payload = {
+    apikey: VIDEOSDK_API_KEY,
+    permissions: ['allow_join'],
+    iat: now,
+    exp: now + 86400,
+  };
+
+  const headerB64 = base64UrlEncodeString(JSON.stringify(header));
+  const payloadB64 = base64UrlEncodeString(JSON.stringify(payload));
+  const signingInput = `${headerB64}.${payloadB64}`;
+
+  const enc = new TextEncoder();
+  const key = await crypto.subtle.importKey(
+    'raw',
+    enc.encode(VIDEOSDK_SECRET),
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign'],
+  );
+  const signature = await crypto.subtle.sign('HMAC', key, enc.encode(signingInput));
+  const sigB64 = await base64UrlEncode(signature);
+
+  return `${headerB64}.${payloadB64}.${sigB64}`;
 }
 
 async function createMeeting(token: string): Promise<string | null> {
@@ -138,12 +163,7 @@ export default function Live() {
 
   const startBroadcast = async () => {
     setCreating(true);
-    const token = await fetchVideoSDKToken();
-    if (!token) {
-      showToast('Could not generate VideoSDK token. Please try again.', 'error');
-      setCreating(false);
-      return;
-    }
+    const token = await generateVideoSDKToken();
     setVideosdkToken(token);
     const id = await createMeeting(token);
     if (id) {
