@@ -43,16 +43,31 @@ function generateVideoSDKToken(): string {
   return `${headerB64}.${payloadB64}.${sigB64}`;
 }
 
-async function createMeeting(token: string): Promise<string | null> {
+function generateRoomId(): string {
+  return 'room-' + crypto.randomUUID();
+}
+
+async function createMeeting(token: string, customRoomId: string): Promise<{ roomId: string } | { error: string }> {
   try {
     const res = await fetch('https://api.videosdk.live/v2/rooms', {
       method: 'POST',
       headers: { Authorization: token, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ customRoomId }),
     });
     const data = await res.json();
-    return data?.roomId ?? null;
-  } catch {
-    return null;
+    if (!res.ok) {
+      const msg = data?.message || data?.error || `HTTP ${res.status}`;
+      console.error('VideoSDK create room failed:', data);
+      return { error: msg };
+    }
+    if (!data?.roomId) {
+      console.error('VideoSDK response missing roomId:', data);
+      return { error: 'No roomId in response' };
+    }
+    return { roomId: data.roomId };
+  } catch (error) {
+    console.error('VideoSDK create room error:', error);
+    return { error: error instanceof Error ? error.message : String(error) };
   }
 }
 
@@ -152,13 +167,19 @@ export default function Live() {
 
   const startBroadcast = async () => {
     setCreating(true);
-    const token = generateVideoSDKToken();
-    setVideosdkToken(token);
-    const id = await createMeeting(token);
-    if (id) {
-      setMeetingId(id);
-    } else {
-      showToast('Could not create broadcast. Please try again.', 'error');
+    try {
+      const token = generateVideoSDKToken();
+      setVideosdkToken(token);
+      const customRoomId = generateRoomId();
+      const result = await createMeeting(token, customRoomId);
+      if ('roomId' in result) {
+        setMeetingId(result.roomId);
+      } else {
+        showToast('Error: ' + result.error, 'error');
+      }
+    } catch (error) {
+      console.error('startBroadcast error:', error);
+      showToast('Error: ' + (error instanceof Error ? error.message : String(error)), 'error');
     }
     setCreating(false);
   };
@@ -188,7 +209,6 @@ export default function Live() {
           debugMode: false,
         }}
         token={videosdkToken}
-        joinWithoutUserInteraction
       >
         <BroadcastView
           camOn={camOn}
