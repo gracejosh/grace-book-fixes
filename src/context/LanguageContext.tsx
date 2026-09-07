@@ -13,6 +13,7 @@ const LanguageContext = createContext<LanguageContextValue | undefined>(undefine
 
 export const translations: Record<string, { en: string; am: string }> = {
   'nav.home': { en: 'Home', am: 'ቤት' },
+  'nav.bible': { en: 'Bible', am: 'መጽሐፍ ቅዱስ' },
   'nav.verses': { en: 'Verses', am: 'የመጽሐፍ ቅዱስ ጥቅሶች' },
   'nav.posts': { en: 'Posts', am: 'ልጥፎች' },
   'nav.books': { en: 'Books', am: 'መጻሕፍት' },
