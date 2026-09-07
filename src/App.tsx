@@ -8,9 +8,9 @@ import { ErrorBoundary } from '@/components/ErrorBoundary';
 import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
 import ScrollToTop from '@/components/ScrollToTop';
-import PopupAds from '@/components/PopupAds';
+import AdPopup from '@/components/AdPopup';
 import Home from '@/pages/Home';
-import Verses from '@/pages/Verses';
+import Posts from '@/pages/Posts';
 import Books from '@/pages/Books';
 import Courses from '@/pages/Courses';
 import Quiz from '@/pages/Quiz';
@@ -19,10 +19,8 @@ import Profile from '@/pages/Profile';
 import Admin from '@/pages/Admin';
 import About from '@/pages/About';
 import Flyers from '@/pages/Flyers';
-import Posts from '@/pages/Posts';
-import Blog from '@/pages/Blog';
+import Blogs from '@/pages/Blogs';
 import Settings from '@/pages/Settings';
-import Notebook from '@/pages/Notebook';
 import Live from '@/pages/Live';
 import NotFound from '@/pages/NotFound';
 
@@ -43,10 +41,10 @@ export default function App() {
                 <ScrollToTop />
                 <div className="min-h-screen flex flex-col">
                   <Navbar />
-                  <main className="flex-1 pb-16 lg:pb-0">
+                  <main className="flex-1 pt-14 pb-16">
                     <Routes>
                       <Route path="/" element={<Home />} />
-                      <Route path="/verses" element={<Verses />} />
+                      <Route path="/posts" element={<Posts />} />
                       <Route path="/books" element={<Books />} />
                       <Route path="/courses" element={<Courses />} />
                       <Route path="/quiz" element={<Quiz />} />
@@ -55,17 +53,15 @@ export default function App() {
                       <Route path="/admin" element={<Admin />} />
                       <Route path="/about" element={<About />} />
                       <Route path="/flyers" element={<Flyers />} />
-                      <Route path="/posts" element={<Posts />} />
-                      <Route path="/blog" element={<Blog />} />
+                      <Route path="/blogs" element={<Blogs />} />
                       <Route path="/settings" element={<Settings />} />
-                      <Route path="/notebook" element={<Notebook />} />
                       <Route path="/live" element={<Live />} />
                       <Route path="*" element={<NotFound />} />
                     </Routes>
                   </main>
                   <Footer />
+                  <AdPopup />
                 </div>
-                <PopupAds />
               </BrowserRouter>
             </ToastProvider>
           </AuthProvider>

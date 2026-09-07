@@ -89,7 +89,6 @@ export default function Verses() {
 
   return (
     <div className="min-h-screen">
-      {/* Hero with daily verse */}
       <section className="relative overflow-hidden bg-gradient-to-br from-primary-900 via-primary-800 to-slate-900 dark:from-slate-950 dark:via-primary-950 dark:to-slate-950 py-16">
         <div className="absolute inset-0 opacity-20">
           <div className="absolute top-10 left-20 w-64 h-64 bg-gold-500 rounded-full blur-3xl animate-float" />
@@ -151,7 +150,6 @@ export default function Verses() {
         </div>
       </section>
 
-      {/* Library */}
       <section className="section-padding">
         <div className="container-narrow">
           <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between mb-8">
@@ -234,7 +232,6 @@ export default function Verses() {
         </div>
       </section>
 
-      {/* Share modal */}
       <AnimatePresence>
         {shareVerse && (
           <motion.div

@@ -5,9 +5,6 @@ export interface BibleVerseData {
   translation?: string;
 }
 
-/**
- * Fetch a random Bible verse from labs.bible.org (no API key needed).
- */
 export async function fetchRandomVerse(): Promise<BibleVerseData | null> {
   try {
     const res = await fetch('https://labs.bible.org/api/?passage=random&type=json');
@@ -26,10 +23,6 @@ export async function fetchRandomVerse(): Promise<BibleVerseData | null> {
   }
 }
 
-/**
- * Fetch a specific verse from bible-api.com (no API key needed).
- * Example: fetchEnglishVerse('john', '3:16')
- */
 export async function fetchEnglishVerse(book: string, chapterVerse: string): Promise<BibleVerseData | null> {
   try {
     const res = await fetch(`https://bible-api.com/${book}+${chapterVerse}`);
@@ -48,10 +41,6 @@ export async function fetchEnglishVerse(book: string, chapterVerse: string): Pro
   }
 }
 
-/**
- * Fetch a specific verse in Amharic from getbible.net (no API key needed).
- * Example: fetchAmharicVerse('john', '3', '16')
- */
 export async function fetchAmharicVerse(book: string, chapter: string, verse: string): Promise<BibleVerseData | null> {
   try {
     const res = await fetch(`https://getbible.net/v2/amharic/${book}/${chapter}/${verse}.json`);
@@ -72,9 +61,6 @@ export async function fetchAmharicVerse(book: string, chapter: string, verse: st
   }
 }
 
-/**
- * Fetch a verse in the specified language, with automatic fallback.
- */
 export async function fetchVerseForLang(lang: 'en' | 'am', book: string, chapter: string, verse: string): Promise<BibleVerseData | null> {
   if (lang === 'am') {
     const am = await fetchAmharicVerse(book, chapter, verse);

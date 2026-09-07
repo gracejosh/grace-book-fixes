@@ -1,258 +1,648 @@
-import { useEffect, useState, useRef, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { supabase } from '@/lib/supabase';
+import { supabase, uploadToCloudinary } from '@/lib/supabase';
 import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/context/ToastContext';
-import { uploadToCloudinary } from '@/lib/supabase';
-import type { Flyer } from '@/types';
-import { Image as ImageIcon, Heart, Share2, Upload, X, ChevronLeft, ChevronRight, Plus } from 'lucide-react';
-import { SkeletonCard, EmptyState } from '@/components/ui';
+import { useLang } from '@/context/LanguageContext';
+import type { Flyer, Profile } from '@/types';
+import { EmptyState } from '@/components/ui';
+import {
+  Heart, Share2, Plus, X, ChevronLeft, ChevronRight, Loader,
+  Facebook, Twitter, MessageCircle, Mail, Search, Image as ImageIcon,
+  Trash2, Send,
+} from 'lucide-react';
 
-const categories = ['All', 'Events', 'Sermons', 'Conferences', 'Youth', 'Music', 'General'];
+const CATEGORIES = [
+  'Evangelism', 'Salvation', 'Prayer', 'Youth', 'Women', 'Men',
+  'Outreach', 'Events', 'Testimony', 'Other',
+];
+
+const timeAgo = (date: string) => {
+  const diff = Date.now() - new Date(date).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return 'just now';
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  const days = Math.floor(hrs / 24);
+  if (days < 30) return `${days}d ago`;
+  return new Date(date).toLocaleDateString();
+};
 
 export default function Flyers() {
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const { showToast } = useToast();
+  const { t } = useLang();
   const [flyers, setFlyers] = useState<Flyer[]>([]);
+  const [authors, setAuthors] = useState<Record<string, Profile>>({});
   const [loading, setLoading] = useState(true);
-  const [category, setCategory] = useState('All');
-  const [showUpload, setShowUpload] = useState(false);
-  const [carouselIdx, setCarouselIdx] = useState<number | null>(null);
+  const [search, setSearch] = useState('');
+  const [category, setCategory] = useState('all');
   const [likedFlyers, setLikedFlyers] = useState<Set<string>>(new Set());
-  const [form, setForm] = useState({ title: '', description: '', category: 'General' });
-  const [uploadingImages, setUploadingImages] = useState(false);
-  const [imageUrls, setImageUrls] = useState<string[]>([]);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [showUpload, setShowUpload] = useState(false);
+  const [shareFlyer, setShareFlyer] = useState<Flyer | null>(null);
 
-  useEffect(() => {
-    (async () => {
-      const { data, error } = await supabase.from('flyers').select('*').order('created_at', { ascending: false });
-      if (error) {
-        showToast('Could not load flyers', 'error');
-        setLoading(false);
-        return;
-      }
-      setFlyers((data as Flyer[]) ?? []);
+  const loadFlyers = useCallback(async () => {
+    setLoading(true);
+    const { data, error } = await supabase
+      .from('flyers')
+      .select('*')
+      .eq('is_approved', true)
+      .order('created_at', { ascending: false })
+      .limit(100);
+    if (error) {
+      showToast('Could not load flyers', 'error');
       setLoading(false);
-    })();
+      return;
+    }
+    const fetched = (data as Flyer[]) ?? [];
+    setFlyers(fetched);
+
+    const authorIds = [...new Set(fetched.map((f) => f.user_id).filter(Boolean))] as string[];
+    if (authorIds.length > 0) {
+      const { data: profData } = await supabase
+        .from('profiles')
+        .select('*')
+        .in('id', authorIds);
+      const map: Record<string, Profile> = {};
+      (profData as Profile[] | null)?.forEach((p) => { map[p.id] = p; });
+      setAuthors(map);
+    }
+
+    if (user) {
+      const { data: likes } = await supabase
+        .from('flyer_likes')
+        .select('flyer_id')
+        .eq('user_id', user.id);
+      setLikedFlyers(new Set((likes ?? []).map((l: { flyer_id: string }) => l.flyer_id)));
+    }
+    setLoading(false);
+  }, [showToast, user]);
+
+  useEffect(() => { loadFlyers(); }, [loadFlyers]);
+
+  const categories = useMemo(() => {
+    const cats = Array.from(new Set(flyers.map((f) => f.category).filter(Boolean))) as string[];
+    return ['all', ...cats];
+  }, [flyers]);
+
+  const filtered = useMemo(() => {
+    return flyers.filter((f) => {
+      const matchesCat = category === 'all' || f.category === category;
+      const q = search.toLowerCase();
+      const matchesSearch = !search ||
+        (f.title?.toLowerCase().includes(q)) ||
+        (f.description?.toLowerCase().includes(q));
+      return matchesCat && matchesSearch;
+    });
+  }, [flyers, category, search]);
+
+  const toggleLike = useCallback(async (flyer: Flyer) => {
+    if (!user) {
+      showToast('Please sign in to like flyers', 'info');
+      return;
+    }
+    const isLiked = likedFlyers.has(flyer.id);
+    setLikedFlyers((prev) => {
+      const next = new Set(prev);
+      if (isLiked) next.delete(flyer.id); else next.add(flyer.id);
+      return next;
+    });
+    setFlyers((prev) => prev.map((f) =>
+      f.id === flyer.id ? { ...f, likes_count: f.likes_count + (isLiked ? -1 : 1) } : f
+    ));
+    if (isLiked) {
+      await supabase.from('flyer_likes').delete().eq('flyer_id', flyer.id).eq('user_id', user.id);
+    } else {
+      await supabase.from('flyer_likes').insert({ flyer_id: flyer.id, user_id: user.id });
+    }
+  }, [user, likedFlyers, showToast]);
+
+  const handleDelete = useCallback(async (flyer: Flyer) => {
+    if (!confirm('Delete this flyer?')) return;
+    const { error } = await supabase.from('flyers').delete().eq('id', flyer.id);
+    if (error) {
+      showToast('Could not delete flyer', 'error');
+      return;
+    }
+    setFlyers((prev) => prev.filter((f) => f.id !== flyer.id));
+    showToast('Flyer deleted', 'info');
   }, [showToast]);
 
-  const filtered = category === 'All' ? flyers : flyers.filter((f) => f.category === category);
+  const canDelete = (flyer: Flyer) => user?.id === flyer.user_id || profile?.is_admin;
 
-  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (!files) return;
-    setUploadingImages(true);
-    try {
-      const urls: string[] = [];
-      for (const file of Array.from(files)) {
-        const url = await uploadToCloudinary(file, 'image');
-        urls.push(url);
-      }
-      setImageUrls((prev) => [...prev, ...urls]);
-      showToast('Images uploaded', 'success');
-    } catch {
-      showToast('Upload failed', 'error');
-    }
-    setUploadingImages(false);
-    if (fileInputRef.current) fileInputRef.current.value = '';
-  };
-
-  const submitFlyer = async () => {
-    if (!user) {
-      showToast('Please sign in to upload flyers', 'info');
-      return;
-    }
-    if (!form.title.trim() || imageUrls.length === 0) {
-      showToast('Title and at least one image required', 'error');
-      return;
-    }
-    const { data, error } = await supabase.from('flyers').insert({
-      title: form.title.trim(),
-      description: form.description,
-      images: imageUrls,
-      category: form.category,
-    }).select().single();
-    if (error) {
-      showToast('Could not upload flyer', 'error');
-      return;
-    }
-    setFlyers((prev) => [data as Flyer, ...prev]);
-    setForm({ title: '', description: '', category: 'General' });
-    setImageUrls([]);
-    setShowUpload(false);
-    showToast('Flyer uploaded!', 'success');
-  };
-
-  const handleLike = async (flyer: Flyer) => {
-    if (!user) {
-      showToast('Sign in to like', 'info');
-      return;
-    }
-    if (likedFlyers.has(flyer.id)) return;
-    await supabase.from('flyers').update({ likes_count: flyer.likes_count + 1 }).eq('id', flyer.id);
-    setLikedFlyers((prev) => new Set(prev).add(flyer.id));
-    setFlyers((prev) => prev.map((f) => f.id === flyer.id ? { ...f, likes_count: f.likes_count + 1 } : f));
-  };
-
-  const handleShare = async (flyer: Flyer) => {
-    const text = `Check out this flyer: ${flyer.title}`;
-    if (navigator.share) {
-      navigator.share({ text, url: window.location.href }).catch(() => {});
-    } else {
-      navigator.clipboard.writeText(text);
-      showToast('Link copied!', 'success');
-    }
-  };
-
-  const openCarousel = (flyerIdx: number) => setCarouselIdx(flyerIdx);
-
-  const nextImage = useCallback(() => {
-    setCarouselIdx((prev) => {
-      if (prev === null) return prev;
-      return prev + 1 >= filtered.length ? 0 : prev + 1;
-    });
-  }, [filtered.length]);
-
-  const prevImage = useCallback(() => {
-    setCarouselIdx((prev) => {
-      if (prev === null) return prev;
-      return prev - 1 < 0 ? filtered.length - 1 : prev - 1;
-    });
-  }, [filtered.length]);
+  const shareText = (flyer: Flyer) => encodeURIComponent(
+    flyer.title || flyer.description || 'Check out this gospel flyer on Grace Book'
+  );
 
   return (
     <div className="min-h-screen">
-      <section className="relative overflow-hidden bg-gradient-to-br from-primary-900 to-slate-900 dark:from-slate-950 dark:to-primary-950 py-16">
+      {/* Hero */}
+      <section className="relative overflow-hidden bg-gradient-to-br from-primary-900 via-primary-800 to-slate-900 dark:from-slate-950 dark:via-primary-950 dark:to-slate-950 py-16">
         <div className="absolute inset-0 opacity-20">
-          <div className="absolute top-10 right-20 w-72 h-72 bg-gold-500 rounded-full blur-3xl animate-float" />
+          <div className="absolute top-10 left-20 w-64 h-64 bg-gold-500 rounded-full blur-3xl animate-float" />
+          <div className="absolute bottom-10 right-20 w-64 h-64 bg-primary-500 rounded-full blur-3xl animate-float" style={{ animationDelay: '3s' }} />
         </div>
         <div className="relative max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
           <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/10 backdrop-blur-md border border-white/20 mb-6">
             <ImageIcon className="h-4 w-4 text-gold-400" />
-            <span className="text-sm text-white/90 font-medium">Community Flyers</span>
+            <span className="text-sm text-white/90 font-medium">Gospel Flyers</span>
           </div>
-          <h1 className="text-4xl sm:text-5xl font-bold text-white mb-4">Flyers & Events</h1>
-          <p className="text-white/80 max-w-2xl mx-auto">Share and discover Christian event flyers, conference announcements, and more.</p>
+          <h1 className="text-4xl sm:text-5xl font-bold text-white mb-4">
+            Gospel Flyers
+          </h1>
+          <p className="text-lg text-white/70 mb-8 max-w-2xl mx-auto">
+            Discover and share beautiful gospel flyers. Swipe through images, like your favorites, and spread the Word.
+          </p>
           {user && (
-            <button onClick={() => setShowUpload(true)} className="btn-gold mt-6">
-              <Upload className="h-4 w-4" /> Upload Flyer
+            <button onClick={() => setShowUpload(true)} className="btn-gold">
+              <Plus className="h-5 w-5" /> Upload Flyer
             </button>
           )}
         </div>
       </section>
 
+      {/* Content */}
       <section className="section-padding">
         <div className="container-narrow">
-          <div className="flex flex-wrap gap-2 mb-8">
-            {categories.map((cat) => (
-              <button key={cat} onClick={() => setCategory(cat)}
-                className={`px-4 py-2 rounded-xl text-sm font-medium transition-all ${category === cat ? 'bg-gradient-to-r from-primary-600 to-primary-700 text-white shadow-lg' : 'glass text-slate-600 dark:text-slate-300 hover:scale-105'}`}>
-                {cat}
-              </button>
-            ))}
+          {/* Filters + Search */}
+          <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between mb-8">
+            <div className="flex flex-wrap gap-2">
+              {categories.map((cat) => (
+                <button
+                  key={cat}
+                  onClick={() => setCategory(cat)}
+                  className={`px-4 py-2 rounded-xl text-sm font-medium transition-all duration-200 ${
+                    category === cat
+                      ? 'bg-gradient-to-r from-primary-600 to-primary-700 text-white shadow-lg shadow-primary-600/25'
+                      : 'glass text-slate-600 dark:text-slate-300 hover:scale-105'
+                  }`}
+                >
+                  {cat === 'all' ? 'All' : cat}
+                </button>
+              ))}
+            </div>
+            <div className="relative w-full sm:w-64">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+              <input
+                type="text"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search flyers..."
+                className="input-field pl-10"
+              />
+            </div>
           </div>
 
+          {/* Grid */}
           {loading ? (
-            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
-              {Array.from({ length: 6 }).map((_, i) => <SkeletonCard key={i} />)}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+              {Array.from({ length: 8 }).map((_, i) => (
+                <div key={i} className="glass-card p-4">
+                  <div className="skeleton h-64 rounded-xl mb-3" />
+                  <div className="skeleton h-5 w-3/4 rounded-lg mb-2" />
+                  <div className="skeleton h-4 w-1/2 rounded-lg" />
+                </div>
+              ))}
             </div>
           ) : filtered.length === 0 ? (
-            <EmptyState icon={<ImageIcon className="h-8 w-8 text-primary-500" />} title="No Flyers Yet" description="Be the first to upload a flyer!" />
+            <EmptyState
+              icon={<ImageIcon className="h-8 w-8 text-primary-500" />}
+              title="No Flyers Yet"
+              description={user ? "Be the first to share a gospel flyer!" : "Sign in to upload and share flyers."}
+              action={user ? <button onClick={() => setShowUpload(true)} className="btn-primary"><Plus className="h-4 w-4" /> Upload Flyer</button> : undefined}
+            />
           ) : (
-            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
               {filtered.map((flyer, i) => (
-                <motion.div key={flyer.id} initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: Math.min(i * 0.06, 0.5) }}
-                  className="glass-card overflow-hidden group hover:shadow-2xl transition-all duration-300 hover:-translate-y-1">
-                  <div className="relative h-56 overflow-hidden cursor-pointer" onClick={() => openCarousel(i)}>
-                    {flyer.images[0] ? (
-                      <img src={flyer.images[0]} alt={flyer.title} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
-                    ) : (
-                      <div className="flex items-center justify-center h-full"><ImageIcon className="h-16 w-16 text-primary-300" /></div>
-                    )}
-                    {flyer.images.length > 1 && (
-                      <div className="absolute bottom-2 right-2 px-2 py-1 rounded-lg bg-black/60 text-white text-xs">{flyer.images.length} images</div>
-                    )}
-                  </div>
-                  <div className="p-5">
-                    <span className="text-xs font-semibold px-2.5 py-1 rounded-lg bg-primary-100 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300 mb-2 inline-block">{flyer.category}</span>
-                    <h3 className="text-lg font-bold mb-1 line-clamp-1">{flyer.title}</h3>
-                    {flyer.description && <p className="text-sm text-slate-500 dark:text-slate-400 mb-3 line-clamp-2">{flyer.description}</p>}
-                    <div className="flex items-center gap-3">
-                      <button onClick={() => handleLike(flyer)} className="flex items-center gap-1.5 text-sm text-slate-600 dark:text-slate-300 hover:text-rose-500 transition-colors">
-                        <Heart className={`h-4 w-4 ${likedFlyers.has(flyer.id) ? 'fill-rose-500 text-rose-500' : ''}`} /> {flyer.likes_count}
-                      </button>
-                      <button onClick={() => handleShare(flyer)} className="flex items-center gap-1.5 text-sm text-slate-600 dark:text-slate-300 hover:text-primary-500 transition-colors">
-                        <Share2 className="h-4 w-4" /> Share
-                      </button>
-                    </div>
-                  </div>
-                </motion.div>
+                <FlyerCard
+                  key={flyer.id}
+                  flyer={flyer}
+                  author={flyer.user_id ? authors[flyer.user_id] : undefined}
+                  isLiked={likedFlyers.has(flyer.id)}
+                  onLike={() => toggleLike(flyer)}
+                  onShare={() => setShareFlyer(flyer)}
+                  onDelete={() => handleDelete(flyer)}
+                  canDelete={canDelete(flyer) ? true : false}
+                  index={i}
+                />
               ))}
             </div>
           )}
         </div>
       </section>
 
-      {/* Upload modal */}
+      {/* Upload Modal */}
       <AnimatePresence>
         {showUpload && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setShowUpload(false)}
-            className="fixed inset-0 z-[9999] bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
-            <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }} onClick={(e) => e.stopPropagation()}
-              className="glass-card p-6 max-w-lg w-full max-h-[90vh] overflow-y-auto scrollbar-thin">
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-xl font-bold">Upload Flyer</h2>
-                <button onClick={() => setShowUpload(false)} className="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700"><X className="h-5 w-5" /></button>
-              </div>
-              <div className="space-y-3">
-                <input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} placeholder="Flyer title" className="input-field" />
-                <textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} placeholder="Description" className="input-field min-h-[80px]" />
-                <select value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} className="input-field">
-                  {['Events', 'Sermons', 'Conferences', 'Youth', 'Music', 'General'].map((c) => <option key={c}>{c}</option>)}
-                </select>
-                <input ref={fileInputRef} type="file" accept="image/*" multiple onChange={handleImageUpload} className="input-field" />
-                {uploadingImages && <p className="text-xs text-amber-500">Uploading images...</p>}
-                {imageUrls.length > 0 && (
-                  <div className="grid grid-cols-3 gap-2">
-                    {imageUrls.map((url, idx) => (
-                      <div key={idx} className="relative">
-                        <img src={url} alt="" className="w-full h-20 object-cover rounded-lg" />
-                        <button onClick={() => setImageUrls((prev) => prev.filter((_, i) => i !== idx))}
-                          className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-red-500 text-white flex items-center justify-center text-xs"><X className="h-3 w-3" /></button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-                <button onClick={submitFlyer} disabled={uploadingImages || !form.title.trim() || imageUrls.length === 0} className="btn-primary w-full">
-                  <Plus className="h-4 w-4" /> Publish Flyer
-                </button>
-              </div>
-            </motion.div>
-          </motion.div>
+          <UploadModal
+            onClose={() => setShowUpload(false)}
+            onUploaded={() => { setShowUpload(false); loadFlyers(); }}
+            showToast={showToast}
+          />
         )}
       </AnimatePresence>
 
-      {/* Carousel viewer */}
+      {/* Share Modal */}
       <AnimatePresence>
-        {carouselIdx !== null && filtered[carouselIdx] && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            onClick={() => setCarouselIdx(null)}
-            className="fixed inset-0 z-[9999] bg-black/90 flex items-center justify-center p-4">
-            <button onClick={(e) => { e.stopPropagation(); setCarouselIdx(null); }} className="absolute top-4 right-4 p-2 rounded-xl bg-white/10 text-white hover:bg-white/20"><X className="h-6 w-6" /></button>
-            <button onClick={(e) => { e.stopPropagation(); prevImage(); }} className="absolute left-4 p-2 rounded-xl bg-white/10 text-white hover:bg-white/20"><ChevronLeft className="h-8 w-8" /></button>
-            <button onClick={(e) => { e.stopPropagation(); nextImage(); }} className="absolute right-4 p-2 rounded-xl bg-white/10 text-white hover:bg-white/20"><ChevronRight className="h-8 w-8" /></button>
-            <motion.div key={carouselIdx} initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }}
-              onClick={(e) => e.stopPropagation()} className="max-w-2xl w-full">
-              <img src={filtered[carouselIdx].images[0]} alt={filtered[carouselIdx].title} className="w-full max-h-[70vh] object-contain rounded-xl" />
-              <div className="mt-4 text-center">
-                <h3 className="text-xl font-bold text-white">{filtered[carouselIdx].title}</h3>
-                {filtered[carouselIdx].description && <p className="text-white/70 mt-1">{filtered[carouselIdx].description}</p>}
+        {shareFlyer && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setShareFlyer(null)}
+            className="fixed inset-0 z-[9999] bg-black/50 backdrop-blur-sm flex items-center justify-center p-4"
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              onClick={(e) => e.stopPropagation()}
+              className="glass-card p-6 max-w-md w-full"
+            >
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-xl font-bold">Share This Flyer</h3>
+                <button onClick={() => setShareFlyer(null)} className="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700">
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+              <p className="text-sm text-slate-600 dark:text-slate-300 mb-4 italic">
+                {shareFlyer.title || shareFlyer.description?.slice(0, 100) || 'Grace Book Flyer'}
+              </p>
+              <div className="grid grid-cols-2 gap-3">
+                <a href={`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(window.location.origin + '/flyers')}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 p-3 rounded-xl bg-blue-600 text-white font-medium hover:scale-105 transition-transform">
+                  <Facebook className="h-5 w-5" /> Facebook
+                </a>
+                <a href={`https://twitter.com/intent/tweet?text=${shareText(shareFlyer)}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 p-3 rounded-xl bg-sky-500 text-white font-medium hover:scale-105 transition-transform">
+                  <Twitter className="h-5 w-5" /> Twitter
+                </a>
+                <a href={`https://wa.me/?text=${shareText(shareFlyer)}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 p-3 rounded-xl bg-green-500 text-white font-medium hover:scale-105 transition-transform">
+                  <MessageCircle className="h-5 w-5" /> WhatsApp
+                </a>
+                <a href={`mailto:?subject=Check out this flyer&body=${shareText(shareFlyer)}`} className="flex items-center gap-2 p-3 rounded-xl bg-slate-600 text-white font-medium hover:scale-105 transition-transform">
+                  <Mail className="h-5 w-5" /> Email
+                </a>
               </div>
             </motion.div>
           </motion.div>
         )}
       </AnimatePresence>
     </div>
+  );
+}
+
+function FlyerCard({
+  flyer, author, isLiked, onLike, onShare, onDelete, canDelete, index,
+}: {
+  flyer: Flyer;
+  author?: Profile;
+  isLiked: boolean;
+  onLike: () => void;
+  onShare: () => void;
+  onDelete: () => void;
+  canDelete: boolean;
+  index: number;
+}) {
+  const [currentImage, setCurrentImage] = useState(0);
+  const images = flyer.images?.length ? flyer.images : [];
+  const touchStartX = useRef<number | null>(null);
+
+  const nextImage = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setCurrentImage((prev) => (prev + 1) % images.length);
+  };
+  const prevImage = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setCurrentImage((prev) => (prev - 1 + images.length) % images.length);
+  };
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    touchStartX.current = e.touches[0].clientX;
+  };
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    if (touchStartX.current === null) return;
+    const diff = e.changedTouches[0].clientX - touchStartX.current;
+    if (Math.abs(diff) > 50) {
+      if (diff < 0) setCurrentImage((p) => (p + 1) % images.length);
+      else setCurrentImage((p) => (p - 1 + images.length) % images.length);
+    }
+    touchStartX.current = null;
+  };
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: Math.min(index * 0.04, 0.4) }}
+      className="glass-card overflow-hidden group hover:shadow-xl transition-shadow duration-300"
+    >
+      {/* Image Carousel */}
+      {images.length > 0 && (
+        <div
+          className="relative aspect-[3/4] overflow-hidden bg-slate-100 dark:bg-slate-800"
+          onTouchStart={handleTouchStart}
+          onTouchEnd={handleTouchEnd}
+        >
+          <motion.img
+            key={currentImage}
+            src={images[currentImage]}
+            alt={flyer.title || 'Flyer'}
+            className="w-full h-full object-cover"
+            initial={{ opacity: 0.5, scale: 1.02 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ duration: 0.3 }}
+            loading="lazy"
+            draggable={false}
+          />
+
+          {/* Navigation arrows */}
+          {images.length > 1 && (
+            <>
+              <button
+                onClick={prevImage}
+                className="absolute left-2 top-1/2 -translate-y-1/2 w-9 h-9 rounded-full bg-black/40 backdrop-blur-sm text-white flex items-center justify-center hover:bg-black/60 transition-all opacity-0 group-hover:opacity-100"
+                aria-label="Previous image"
+              >
+                <ChevronLeft className="h-5 w-5" />
+              </button>
+              <button
+                onClick={nextImage}
+                className="absolute right-2 top-1/2 -translate-y-1/2 w-9 h-9 rounded-full bg-black/40 backdrop-blur-sm text-white flex items-center justify-center hover:bg-black/60 transition-all opacity-0 group-hover:opacity-100"
+                aria-label="Next image"
+              >
+                <ChevronRight className="h-5 w-5" />
+              </button>
+
+              {/* Dots */}
+              <div className="absolute bottom-2 left-1/2 -translate-x-1/2 flex gap-1.5">
+                {images.map((_, idx) => (
+                  <span
+                    key={idx}
+                    className={`w-1.5 h-1.5 rounded-full transition-all ${idx === currentImage ? 'bg-white w-4' : 'bg-white/50'}`}
+                  />
+                ))}
+              </div>
+
+              {/* Counter */}
+              <span className="absolute top-2 right-2 px-2 py-0.5 rounded-lg bg-black/50 backdrop-blur-sm text-white text-xs font-medium">
+                {currentImage + 1}/{images.length}
+              </span>
+            </>
+          )}
+
+          {/* Category tag */}
+          {flyer.category && (
+            <span className="absolute top-2 left-2 px-2.5 py-1 rounded-lg bg-gradient-to-r from-primary-600 to-primary-700 text-white text-xs font-semibold shadow-lg">
+              {flyer.category}
+            </span>
+          )}
+        </div>
+      )}
+
+      {/* Card body */}
+      <div className="p-4">
+        {flyer.title && (
+          <h3 className="font-bold text-base mb-1 line-clamp-2">{flyer.title}</h3>
+        )}
+        {flyer.description && (
+          <p className="text-sm text-slate-600 dark:text-slate-300 leading-relaxed mb-3 line-clamp-3">
+            {flyer.description}
+          </p>
+        )}
+
+        {/* Author */}
+        {author && (
+          <div className="flex items-center gap-2 mb-3">
+            <div className="w-6 h-6 rounded-lg bg-gradient-to-br from-primary-400 to-gold-400 flex items-center justify-center text-white text-xs font-bold overflow-hidden">
+              {author?.avatar_url ? (
+                <img src={author.avatar_url} alt="" className="w-full h-full object-cover" />
+              ) : (
+                author?.username?.charAt(0).toUpperCase() || '?'
+              )}
+            </div>
+            <p className="text-xs font-medium truncate">{author?.username || 'Unknown'}</p>
+            <p className="text-xs text-slate-400 ml-auto">{timeAgo(flyer.created_at)}</p>
+          </div>
+        )}
+
+        {/* Actions */}
+        <div className="flex items-center gap-1 pt-2 border-t border-slate-100 dark:border-slate-700/50">
+          <button
+            onClick={onLike}
+            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all ${
+              isLiked
+                ? 'text-red-500 bg-red-50 dark:bg-red-900/20'
+                : 'text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700'
+            }`}
+          >
+            <Heart className={`h-4 w-4 ${isLiked ? 'fill-red-500' : ''}`} />
+            {flyer.likes_count > 0 && flyer.likes_count}
+          </button>
+
+          <button
+            onClick={onShare}
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700 transition-all ml-auto"
+          >
+            <Share2 className="h-4 w-4" />
+          </button>
+
+          {canDelete && (
+            <button
+              onClick={onDelete}
+              className="p-1.5 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 transition-all"
+              aria-label="Delete flyer"
+            >
+              <Trash2 className="h-4 w-4 text-red-400" />
+            </button>
+          )}
+        </div>
+      </div>
+    </motion.div>
+  );
+}
+
+const MAX_IMAGES = 5;
+
+function UploadModal({ onClose, onUploaded, showToast }: {
+  onClose: () => void;
+  onUploaded: () => void;
+  showToast: (m: string, t?: 'success' | 'error' | 'info' | 'warning') => void;
+}) {
+  const { user } = useAuth();
+  const [title, setTitle] = useState('');
+  const [description, setDescription] = useState('');
+  const [category, setCategory] = useState(CATEGORIES[0]);
+  const [images, setImages] = useState<string[]>([]);
+  const [uploading, setUploading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleFiles = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files ?? []);
+    if (!files.length) return;
+    const remaining = MAX_IMAGES - images.length;
+    if (remaining <= 0) {
+      showToast(`Maximum ${MAX_IMAGES} images per flyer`, 'warning');
+      return;
+    }
+    const toUpload = files.slice(0, remaining);
+    setUploading(true);
+    try {
+      const urls: string[] = [];
+      for (const file of toUpload) {
+        const url = await uploadToCloudinary(file, 'image');
+        urls.push(url);
+      }
+      setImages((prev) => [...prev, ...urls]);
+      showToast(`${urls.length} image(s) uploaded`, 'success');
+    } catch {
+      showToast('Upload failed. Please try again.', 'error');
+    }
+    setUploading(false);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  const removeImage = (idx: number) => {
+    setImages((prev) => prev.filter((_, i) => i !== idx));
+  };
+
+  const handleSubmit = async () => {
+    if (!title.trim()) {
+      showToast('Please add a title', 'warning');
+      return;
+    }
+    if (images.length === 0) {
+      showToast('Please upload at least one image', 'warning');
+      return;
+    }
+    setSaving(true);
+    const { error } = await supabase.from('flyers').insert({
+      user_id: user!.id,
+      title: title.trim(),
+      description: description.trim() || null,
+      images,
+      category,
+    });
+    setSaving(false);
+    if (error) {
+      showToast('Could not create flyer', 'error');
+      return;
+    }
+    showToast('Flyer published!', 'success');
+    onUploaded();
+  };
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      onClick={onClose}
+      className="fixed inset-0 z-[9999] bg-black/50 backdrop-blur-sm flex items-center justify-center p-4"
+    >
+      <motion.div
+        initial={{ scale: 0.9, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        exit={{ scale: 0.9, opacity: 0 }}
+        onClick={(e) => e.stopPropagation()}
+        className="glass-card p-6 max-w-lg w-full max-h-[90vh] overflow-y-auto scrollbar-thin"
+      >
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-xl font-bold">Upload Gospel Flyer</h3>
+          <button onClick={onClose} className="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700">
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        <div className="space-y-4">
+          {/* Title */}
+          <div>
+            <label className="text-sm font-medium mb-1 block">Title</label>
+            <input
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="Flyer title..."
+              className="input-field"
+            />
+          </div>
+
+          {/* Description */}
+          <div>
+            <label className="text-sm font-medium mb-1 block">Description (optional)</label>
+            <textarea
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="Describe this flyer..."
+              className="input-field min-h-[80px] resize-y"
+            />
+          </div>
+
+          {/* Category */}
+          <div>
+            <label className="text-sm font-medium mb-1 block">Category</label>
+            <select
+              value={category}
+              onChange={(e) => setCategory(e.target.value)}
+              className="input-field"
+            >
+              {CATEGORIES.map((cat) => (
+                <option key={cat} value={cat}>{cat}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* Image upload */}
+          <div>
+            <label className="text-sm font-medium mb-1 block">
+              Images ({images.length}/{MAX_IMAGES})
+            </label>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              multiple
+              onChange={handleFiles}
+              className="input-field"
+              disabled={uploading || images.length >= MAX_IMAGES}
+            />
+            {uploading && (
+              <p className="text-xs text-amber-500 mt-2 flex items-center gap-1">
+                <Loader className="h-3 w-3 animate-spin" /> Uploading...
+              </p>
+            )}
+
+            {/* Image previews */}
+            {images.length > 0 && (
+              <div className="grid grid-cols-3 gap-2 mt-3">
+                {images.map((url, idx) => (
+                  <div key={idx} className="relative group">
+                    <img src={url} alt={`Upload ${idx + 1}`} className="w-full h-24 object-cover rounded-lg" />
+                    <button
+                      onClick={() => removeImage(idx)}
+                      className="absolute top-1 right-1 w-6 h-6 rounded-full bg-red-500 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Submit */}
+          <div className="flex gap-2 pt-2">
+            <button
+              onClick={handleSubmit}
+              disabled={saving || uploading}
+              className="btn-primary flex-1"
+            >
+              {saving ? <Loader className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+              {saving ? 'Publishing...' : 'Publish Flyer'}
+            </button>
+            <button onClick={onClose} className="btn-ghost">Cancel</button>
+          </div>
+        </div>
+      </motion.div>
+    </motion.div>
   );
 }

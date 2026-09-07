@@ -254,7 +254,7 @@ export default function Posts() {
           ) : (
             <div className="columns-1 sm:columns-2 lg:columns-3 xl:columns-4 gap-4">
               {filtered.map((post, i) => {
-                const author = authors[post.user_id];
+                const author = post.user_id ? authors[post.user_id] : undefined;
                 const Icon = typeIcon(post.type);
                 const isLiked = likedPosts.has(post.id);
                 return (
