@@ -22,6 +22,7 @@ import Flyers from '@/pages/Flyers';
 import Blogs from '@/pages/Blogs';
 import Settings from '@/pages/Settings';
 import Live from '@/pages/Live';
+import Notebook from '@/pages/Notebook';
 import NotFound from '@/pages/NotFound';
 
 export default function App() {
@@ -56,6 +57,7 @@ export default function App() {
                       <Route path="/blogs" element={<Blogs />} />
                       <Route path="/settings" element={<Settings />} />
                       <Route path="/live" element={<Live />} />
+                      <Route path="/notebook" element={<Notebook />} />
                       <Route path="*" element={<NotFound />} />
                     </Routes>
                   </main>
