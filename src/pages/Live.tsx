@@ -12,8 +12,8 @@ import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/context/ToastContext';
 import { EmptyState } from '@/components/ui';
 
-const VIDEOSDK_API_KEY = 'f33a14df787965f1968c1beb9ab108a583ddca1aede08b77316f22357babc2d7';
-const VIDEOSDK_SECRET = '1ac6c5d87c526233375ac4c3dea6d142b9805deb9648d46c5a1018d685e8576c';
+const VIDEOSDK_API_KEY = '552a12a6-b1d6-4f08-8e11-35e230feb9cb';
+const VIDEOSDK_SECRET = 'f33a14df787965f1968c1beb9ab108a583ddca1aede08b77316f22357babc2d7';
 
 function base64UrlEncodeString(str: string): string {
   return btoa(str).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
