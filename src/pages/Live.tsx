@@ -12,7 +12,22 @@ import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/context/ToastContext';
 import { EmptyState } from '@/components/ui';
 
-const VIDEOSDK_TOKEN = import.meta.env.VITE_VIDEOSDK_TOKEN as string | undefined;
+async function fetchVideoSDKToken(): Promise<string | null> {
+  try {
+    const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/videosdk-token`;
+    const res = await fetch(apiUrl, {
+      headers: {
+        Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+        'Content-Type': 'application/json',
+      },
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    return data?.token ?? null;
+  } catch {
+    return null;
+  }
+}
 
 async function createMeeting(token: string): Promise<string | null> {
   try {
@@ -119,17 +134,22 @@ export default function Live() {
     };
   }, [previewStream]);
 
+  const [videosdkToken, setVideosdkToken] = useState<string | null>(null);
+
   const startBroadcast = async () => {
-    if (!VIDEOSDK_TOKEN) {
-      showToast('VideoSDK token not configured. Set VITE_VIDEOSDK_TOKEN in your environment.', 'error');
+    setCreating(true);
+    const token = await fetchVideoSDKToken();
+    if (!token) {
+      showToast('Could not generate VideoSDK token. Please try again.', 'error');
+      setCreating(false);
       return;
     }
-    setCreating(true);
-    const id = await createMeeting(VIDEOSDK_TOKEN);
+    setVideosdkToken(token);
+    const id = await createMeeting(token);
     if (id) {
       setMeetingId(id);
     } else {
-      showToast('Could not create broadcast. Check your VideoSDK token.', 'error');
+      showToast('Could not create broadcast. Please try again.', 'error');
     }
     setCreating(false);
   };
@@ -147,7 +167,7 @@ export default function Live() {
   }
 
   // If meetingId is set and we have a token, render the meeting view
-  if (meetingId && VIDEOSDK_TOKEN) {
+  if (meetingId && videosdkToken) {
     return (
       <MeetingProvider
         config={{
@@ -158,7 +178,7 @@ export default function Live() {
           mode: 'SEND_AND_RECV',
           debugMode: false,
         }}
-        token={VIDEOSDK_TOKEN}
+        token={videosdkToken}
         joinWithoutUserInteraction
       >
         <BroadcastView
@@ -293,11 +313,7 @@ export default function Live() {
           )}
         </button>
 
-        {!VIDEOSDK_TOKEN && (
-          <p className="text-center text-xs text-amber-500 mt-3">
-            Note: VideoSDK token not configured. Add VITE_VIDEOSDK_TOKEN to enable broadcasting.
-          </p>
-        )}
+
       </div>
     </div>
   );
