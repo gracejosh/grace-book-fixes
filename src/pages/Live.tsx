@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
+import CryptoJS from 'crypto-js';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Video, VideoOff, Mic, MicOff, Radio, AlertCircle,
@@ -33,7 +34,6 @@ function generateVideoSDKToken(): string {
   const payloadB64 = base64UrlEncodeString(JSON.stringify(payload));
   const signingInput = `${headerB64}.${payloadB64}`;
 
-  const CryptoJS = (window as any).CryptoJS;
   const signature = CryptoJS.HmacSHA256(signingInput, VIDEOSDK_SECRET);
   const sigB64 = CryptoJS.enc.Base64.stringify(signature)
     .replace(/\+/g, '-')
