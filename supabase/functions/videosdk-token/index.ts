@@ -1,4 +1,5 @@
 import { createClient } from "npm:@supabase/supabase-js@2.57.4";
+import CryptoJS from "npm:crypto-js@4.2.0";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -10,29 +11,17 @@ function base64UrlEncodeString(str: string): string {
   return btoa(str).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 }
 
-async function base64UrlEncode(data: ArrayBuffer): Promise<string> {
-  const bytes = new Uint8Array(data);
-  let binary = "";
-  for (const byte of bytes) binary += String.fromCharCode(byte);
-  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
-}
-
-async function signJwt(payload: Record<string, unknown>, secret: string): Promise<string> {
+function signJwt(payload: Record<string, unknown>, secret: string): string {
   const header = { alg: "HS256", typ: "JWT" };
   const headerB64 = base64UrlEncodeString(JSON.stringify(header));
   const payloadB64 = base64UrlEncodeString(JSON.stringify(payload));
   const signingInput = `${headerB64}.${payloadB64}`;
 
-  const enc = new TextEncoder();
-  const key = await crypto.subtle.importKey(
-    "raw",
-    enc.encode(secret),
-    { name: "HMAC", hash: "SHA-256" },
-    false,
-    ["sign"],
-  );
-  const signature = await crypto.subtle.sign("HMAC", key, enc.encode(signingInput));
-  const sigB64 = await base64UrlEncode(signature);
+  const signature = CryptoJS.HmacSHA256(signingInput, secret);
+  const sigB64 = CryptoJS.enc.Base64.stringify(signature)
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/, "");
 
   return `${headerB64}.${payloadB64}.${sigB64}`;
 }
@@ -75,7 +64,7 @@ Deno.serve(async (req: Request) => {
       exp: now + 24 * 60 * 60,
     };
 
-    const token = await signJwt(payload, data.secret);
+    const token = signJwt(payload, data.secret);
 
     return new Response(
       JSON.stringify({ token }),
