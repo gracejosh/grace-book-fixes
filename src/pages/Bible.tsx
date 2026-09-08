@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import type { TouchEvent } from "react";
 
 type FontSize = "small" | "medium" | "large";
 
@@ -16,6 +17,7 @@ interface Book {
   id: string;
   name: string;
   chapters: Chapter[];
+  rawChapters: unknown[];
 }
 
 interface SearchResult {
@@ -183,6 +185,43 @@ const normalizeVerseNumber = (value: unknown, fallback: number): string => {
   return text || String(fallback);
 };
 
+const normalizeChapter = (rawChapter: unknown, chapterIndex: number): Chapter => {
+  const chapterRecord = isRecord(rawChapter) ? rawChapter : {};
+  const chapterNumber = asNumber(
+    firstValue(chapterRecord, ["number", "chapter", "chapterNumber", "id"]) ||
+      chapterRecord.__key,
+    chapterIndex + 1,
+  );
+
+  const verses = getRawVerses(rawChapter)
+    .map((rawVerse, verseIndex): Verse => {
+      const verseRecord = isRecord(rawVerse) ? rawVerse : {};
+      const text =
+        typeof rawVerse === "string"
+          ? rawVerse.trim()
+          : asText(firstValue(verseRecord, ["text", "verse", "content", "value", "line"]));
+      const number = normalizeVerseNumber(
+        firstValue(verseRecord, ["number", "verseNumber", "id", "label"]) ||
+          verseRecord.__key,
+        verseIndex + 1,
+      );
+      return { number, text };
+    })
+    .filter((verse) => verse.text.length > 0 || verse.number.length > 0);
+
+  return {
+    number: chapterNumber,
+    verses: verses.sort((a, b) => {
+      const aNumber = Number.parseInt(a.number, 10);
+      const bNumber = Number.parseInt(b.number, 10);
+      return (
+        (Number.isFinite(aNumber) ? aNumber : 0) -
+        (Number.isFinite(bNumber) ? bNumber : 0)
+      );
+    }),
+  };
+};
+
 const normalizeBooks = (data: unknown): Book[] => {
   const rawBooks = getRawBooks(data);
 
@@ -195,48 +234,26 @@ const normalizeBooks = (data: unknown): Book[] => {
         bookIndex,
       );
 
-      const chapters = getRawChapters(rawBook)
-        .map((rawChapter, chapterIndex): Chapter => {
+      const rawChapters = getRawChapters(rawBook);
+      const chapterEntries = rawChapters
+        .map((rawChapter, chapterIndex) => {
           const chapterRecord = isRecord(rawChapter) ? rawChapter : {};
-          const chapterNumber = asNumber(
-            firstValue(chapterRecord, ["number", "chapter", "chapterNumber", "id"]) ||
-              chapterRecord.__key,
-            chapterIndex + 1,
-          );
-
-          const verses = getRawVerses(rawChapter)
-            .map((rawVerse, verseIndex): Verse => {
-              const verseRecord = isRecord(rawVerse) ? rawVerse : {};
-              const text =
-                typeof rawVerse === "string"
-                  ? rawVerse.trim()
-                  : asText(
-                      firstValue(verseRecord, ["text", "verse", "content", "value", "line"]),
-                    );
-              const number = normalizeVerseNumber(
-                firstValue(verseRecord, ["number", "verseNumber", "id", "label"]) ||
-                  verseRecord.__key,
-                verseIndex + 1,
-              );
-              return { number, text };
-            })
-            .filter((verse) => verse.text.length > 0 || verse.number.length > 0);
-
           return {
-            number: chapterNumber,
-            verses: verses.sort((a, b) => {
-              const aNumber = Number.parseInt(a.number, 10);
-              const bNumber = Number.parseInt(b.number, 10);
-              return (Number.isFinite(aNumber) ? aNumber : 0) - (Number.isFinite(bNumber) ? bNumber : 0);
-            }),
+            rawChapter,
+            number: asNumber(
+              firstValue(chapterRecord, ["number", "chapter", "chapterNumber", "id"]) ||
+                chapterRecord.__key,
+              chapterIndex + 1,
+            ),
           };
         })
         .sort((a, b) => a.number - b.number);
 
       return {
-        id: slugify(`${bookName}-${bookIndex}`),
+        id: `${slugify(bookName) || "book"}-${bookIndex}`,
         name: bookName,
-        chapters,
+        chapters: chapterEntries.map((entry) => ({ number: entry.number, verses: [] })),
+        rawChapters: chapterEntries.map((entry) => entry.rawChapter),
       };
     })
     .filter((book) => book.chapters.length > 0);
@@ -262,6 +279,7 @@ const safeRead = <T,>(key: string, fallback: T): T => {
 };
 
 const safeWrite = (key: string, value: unknown) => {
+  if (typeof window === "undefined") return;
   try {
     window.localStorage.setItem(key, JSON.stringify(value));
   } catch {
@@ -309,17 +327,34 @@ const collapseCombinedVerses = (verses: Verse[]): Verse[] => {
 
 const formatChapterLabel = (chapter: Chapter) => `Chapter ${chapter.number}`;
 
+const padNumber = (value: number) => (value < 10 ? `0${value}` : String(value));
+
+const runSoon = (callback: () => void) => {
+  if (typeof window === "undefined") return 0;
+  return window.setTimeout(callback, 0);
+};
+
+const cancelSoon = (timer: number) => {
+  if (typeof window !== "undefined" && timer) window.clearTimeout(timer);
+};
+
 export default function Bible() {
   const [books, setBooks] = useState<Book[]>([]);
   const [selectedBookId, setSelectedBookId] = useState("");
   const [selectedChapterNumber, setSelectedChapterNumber] = useState(1);
   const [visibleChapter, setVisibleChapter] = useState<Chapter | null>(null);
+  const [chapterLoading, setChapterLoading] = useState(false);
   const [fontSize, setFontSize] = useState<FontSize>(readFontSize);
   const [bookmarks, setBookmarks] = useState<string[]>(readBookmarks);
   const [searchQuery, setSearchQuery] = useState("");
   const [showBookmarksOnly, setShowBookmarksOnly] = useState(false);
+  const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
+  const [searching, setSearching] = useState(false);
+  const [isBookSheetOpen, setIsBookSheetOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const chapterMemory = useRef<Record<string, Chapter>>({});
+  const touchStart = useRef<{ x: number; y: number } | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -369,23 +404,50 @@ export default function Bible() {
   useEffect(() => {
     if (!selectedBook) {
       setVisibleChapter(null);
+      setChapterLoading(false);
       return;
     }
 
-    const chapter =
-      selectedBook.chapters.find((item) => item.number === selectedChapterNumber) ||
-      selectedBook.chapters[0];
+    let cancelled = false;
+    const chapterIndex = Math.max(
+      0,
+      selectedBook.chapters.findIndex((item) => item.number === selectedChapterNumber),
+    );
+    const chapter = selectedBook.chapters[chapterIndex] || selectedBook.chapters[0];
 
     if (!chapter) {
       setVisibleChapter(null);
+      setChapterLoading(false);
       return;
     }
 
-    const cachedChapter = safeRead<Chapter | null>(
-      chapterCacheKey(selectedBook.id, chapter.number),
-      null,
-    );
-    setVisibleChapter(cachedChapter?.verses ? cachedChapter : chapter);
+    const cacheKey = chapterCacheKey(selectedBook.id, chapter.number);
+    const memoryChapter = chapterMemory.current[cacheKey];
+    const cachedChapter = safeRead<Chapter | null>(cacheKey, null);
+    const hydratedChapter = memoryChapter || cachedChapter;
+
+    setChapterLoading(true);
+    setVisibleChapter(hydratedChapter || null);
+
+    const timer = runSoon(() => {
+      if (cancelled) return;
+
+      const nextChapter =
+        hydratedChapter ||
+        normalizeChapter(selectedBook.rawChapters[chapterIndex], chapterIndex);
+
+      chapterMemory.current[cacheKey] = nextChapter;
+      safeWrite(cacheKey, nextChapter);
+      if (!cancelled) {
+        setVisibleChapter(nextChapter);
+        setChapterLoading(false);
+      }
+    });
+
+    return () => {
+      cancelled = true;
+      cancelSoon(timer);
+    };
   }, [selectedBook, selectedChapterNumber]);
 
   useEffect(() => {
@@ -414,49 +476,86 @@ export default function Bible() {
     const nextBook = books.find((book) => book.id === bookId);
     setSelectedBookId(bookId);
     setSelectedChapterNumber(nextBook?.chapters[0]?.number || 1);
+    setIsBookSheetOpen(false);
   };
 
   const handleChapterChange = (chapterNumber: number) => {
     setSelectedChapterNumber(chapterNumber);
-    if (selectedBook) {
-      const chapter = selectedBook.chapters.find((item) => item.number === chapterNumber);
-      if (chapter) {
-        safeWrite(chapterCacheKey(selectedBook.id, chapter.number), chapter);
-      }
-    }
   };
 
-  const allSearchResults = useMemo<SearchResult[]>(() => {
+  useEffect(() => {
     const query = searchQuery.trim().toLocaleLowerCase();
-    if (!query && !showBookmarksOnly) return [];
+    if (!query && !showBookmarksOnly) {
+      setSearchResults([]);
+      setSearching(false);
+      return;
+    }
 
-    return books.flatMap((book) =>
-      book.chapters.flatMap((chapter) =>
-        collapseCombinedVerses(chapter.verses)
-          .filter((verse) => {
-            const isBookmarked = bookmarkSet.has(makeVerseKey(book.id, chapter.number, verse.number));
+    let cancelled = false;
+    setSearching(true);
+    const timer = runSoon(() => {
+      const results: SearchResult[] = [];
+
+      books.forEach((book) => {
+        book.chapters.forEach((chapter, chapterIndex) => {
+          const cacheKey = chapterCacheKey(book.id, chapter.number);
+          const chapterData =
+            chapterMemory.current[cacheKey] ||
+            safeRead<Chapter | null>(cacheKey, null) ||
+            normalizeChapter(book.rawChapters[chapterIndex], chapterIndex);
+
+          chapterMemory.current[cacheKey] = chapterData;
+          collapseCombinedVerses(chapterData.verses).forEach((verse) => {
+            const isBookmarked = bookmarkSet.has(
+              makeVerseKey(book.id, chapter.number, verse.number),
+            );
             const matchesQuery =
               !query ||
               `${book.name} ${chapter.number}:${verse.number} ${verse.text}`
                 .toLocaleLowerCase()
                 .includes(query);
-            return matchesQuery && (!showBookmarksOnly || isBookmarked);
-          })
-          .map((verse) => ({
-            book: book.name,
-            bookId: book.id,
-            chapter: chapter.number,
-            verse: verse.number,
-            text: verse.text,
-          })),
-      ),
-    );
+
+            if (matchesQuery && (!showBookmarksOnly || isBookmarked)) {
+              results.push({
+                book: book.name,
+                bookId: book.id,
+                chapter: chapter.number,
+                verse: verse.number,
+                text: verse.text,
+              });
+            }
+          });
+        });
+      });
+
+      if (!cancelled) {
+        setSearchResults(results);
+        setSearching(false);
+      }
+    });
+
+    return () => {
+      cancelled = true;
+      cancelSoon(timer);
+    };
   }, [books, bookmarkSet, searchQuery, showBookmarksOnly]);
 
   const displayedVerses = visibleChapter ? collapseCombinedVerses(visibleChapter.verses) : [];
   const currentBookIndex = selectedBook
     ? Math.max(0, books.findIndex((book) => book.id === selectedBook.id))
     : 0;
+  const currentChapterIndex = selectedBook
+    ? Math.max(
+        0,
+        selectedBook.chapters.findIndex((chapter) => chapter.number === selectedChapterNumber),
+      )
+    : 0;
+  const canGoPrevious = currentChapterIndex > 0 || currentBookIndex > 0;
+  const canGoNext = Boolean(
+    selectedBook &&
+      (currentChapterIndex < selectedBook.chapters.length - 1 ||
+        currentBookIndex < books.length - 1),
+  );
 
   const navigateToResult = (result: SearchResult) => {
     setSelectedBookId(result.bookId);
@@ -465,12 +564,54 @@ export default function Bible() {
     setShowBookmarksOnly(false);
   };
 
+  const moveToAdjacentChapter = (direction: -1 | 1) => {
+    if (!selectedBook) return;
+
+    const chapterIndex = selectedBook.chapters.findIndex(
+      (chapter) => chapter.number === selectedChapterNumber,
+    );
+    const adjacentChapter = selectedBook.chapters[chapterIndex + direction];
+
+    if (adjacentChapter) {
+      setSelectedChapterNumber(adjacentChapter.number);
+      return;
+    }
+
+    const bookIndex = books.findIndex((book) => book.id === selectedBook.id);
+    const adjacentBook = books[bookIndex + direction];
+    if (!adjacentBook) return;
+
+    setSelectedBookId(adjacentBook.id);
+    setSelectedChapterNumber(
+      direction === 1
+        ? adjacentBook.chapters[0]?.number || 1
+        : adjacentBook.chapters[adjacentBook.chapters.length - 1]?.number || 1,
+    );
+  };
+
+  const handleTouchStart = (event: TouchEvent<HTMLElement>) => {
+    const touch = event.touches[0];
+    if (touch) touchStart.current = { x: touch.clientX, y: touch.clientY };
+  };
+
+  const handleTouchEnd = (event: TouchEvent<HTMLElement>) => {
+    const start = touchStart.current;
+    const touch = event.changedTouches[0];
+    touchStart.current = null;
+    if (!start || !touch) return;
+
+    const deltaX = touch.clientX - start.x;
+    const deltaY = touch.clientY - start.y;
+    if (Math.abs(deltaX) < 55 || Math.abs(deltaX) < Math.abs(deltaY) * 1.25) return;
+    moveToAdjacentChapter(deltaX < 0 ? 1 : -1);
+  };
+
   if (loading) {
     return (
       <div className="bible-page">
         <BibleStyles />
         <div className="bible-state" role="status" aria-live="polite">
-          <span className="bible-spinner" aria-hidden="true" />
+          <ChapterSkeleton />
           <p>Opening the Bible…</p>
         </div>
       </div>
@@ -570,12 +711,14 @@ export default function Bible() {
                 <h2>{showBookmarksOnly && !searchQuery ? "Saved verses" : "Search results"}</h2>
               </div>
               <span className="bible-result-count">
-                {allSearchResults.length} {allSearchResults.length === 1 ? "verse" : "verses"}
+                {searching ? "Searching…" : `${searchResults.length} ${searchResults.length === 1 ? "verse" : "verses"}`}
               </span>
             </div>
-            {allSearchResults.length > 0 ? (
+            {searching ? (
+              <ChapterSkeleton compact />
+            ) : searchResults.length > 0 ? (
               <div className="bible-results-list">
-                {allSearchResults.slice(0, 100).map((result) => {
+                {searchResults.slice(0, 100).map((result) => {
                   const resultKey = makeVerseKey(result.bookId, result.chapter, result.verse);
                   return (
                     <button
@@ -597,7 +740,7 @@ export default function Bible() {
                     </button>
                   );
                 })}
-                {allSearchResults.length > 100 && (
+                {searchResults.length > 100 && (
                   <p className="bible-results-note">Showing the first 100 results.</p>
                 )}
               </div>
@@ -624,18 +767,33 @@ export default function Bible() {
                     onClick={() => handleBookChange(book.id)}
                     aria-pressed={book.id === selectedBookId}
                   >
-                    <span className="bible-book__number">{String(index + 1).padStart(2, "0")}</span>
+                    <span className="bible-book__number">{padNumber(index + 1)}</span>
                     <span>{book.name}</span>
                   </button>
                 ))}
               </div>
             </aside>
 
-            <main className="bible-reader">
+            <main
+              className={`bible-reader ${chapterLoading ? "is-loading" : "is-ready"}`}
+              onTouchStart={handleTouchStart}
+              onTouchEnd={handleTouchEnd}
+            >
               <div className="bible-reader__topline">
                 <p className="bible-eyebrow">{selectedBook?.name || "Bible"}</p>
                 <span>{selectedBook?.chapters.length || 0} chapters</span>
               </div>
+              <button
+                className="bible-mobile-books-trigger"
+                type="button"
+                onClick={() => setIsBookSheetOpen(true)}
+                aria-haspopup="dialog"
+                aria-expanded={isBookSheetOpen}
+              >
+                <span>Browse books</span>
+                <strong>{selectedBook?.name || "Select a book"}</strong>
+                <span aria-hidden="true">⌄</span>
+              </button>
               <div className="bible-reader__heading">
                 <div>
                   <h2>{selectedBook?.name || "Select a book"}</h2>
@@ -659,7 +817,9 @@ export default function Bible() {
               </div>
 
               <div className={`bible-verse-list bible-verse-list--${fontSize}`}>
-                {displayedVerses.length > 0 ? (
+                {chapterLoading || !visibleChapter ? (
+                  <ChapterSkeleton compact />
+                ) : displayedVerses.length > 0 ? (
                   displayedVerses.map((verse) => {
                     const key = selectedBook
                       ? makeVerseKey(selectedBook.id, selectedChapterNumber, verse.number)
@@ -689,34 +849,91 @@ export default function Bible() {
                 )}
               </div>
 
+              <p className="bible-swipe-hint" aria-hidden="true">
+                Swipe left or right to change chapter
+              </p>
+
               <div className="bible-reader__footer">
                 <button
                   className="bible-button"
                   type="button"
-                  disabled={!selectedBook || currentBookIndex === 0}
-                  onClick={() => {
-                    const previousBook = books[currentBookIndex - 1];
-                    if (previousBook) handleBookChange(previousBook.id);
-                  }}
+                  disabled={!selectedBook || !canGoPrevious}
+                  onClick={() => moveToAdjacentChapter(-1)}
                 >
-                  ← Previous book
+                  ← Previous
                 </button>
                 <button
                   className="bible-button"
                   type="button"
-                  disabled={!selectedBook || currentBookIndex === books.length - 1}
-                  onClick={() => {
-                    const nextBook = books[currentBookIndex + 1];
-                    if (nextBook) handleBookChange(nextBook.id);
-                  }}
+                  disabled={!selectedBook || !canGoNext}
+                  onClick={() => moveToAdjacentChapter(1)}
                 >
-                  Next book →
+                  Next →
                 </button>
               </div>
             </main>
           </div>
         )}
+
+        {isBookSheetOpen && (
+          <div
+            className="bible-sheet-backdrop"
+            role="presentation"
+            onClick={() => setIsBookSheetOpen(false)}
+          >
+            <section
+              className="bible-book-sheet"
+              role="dialog"
+              aria-modal="true"
+              aria-label="Choose a Bible book"
+              onClick={(event) => event.stopPropagation()}
+            >
+              <div className="bible-book-sheet__handle" aria-hidden="true" />
+              <div className="bible-book-sheet__heading">
+                <div>
+                  <p className="bible-eyebrow">Navigate</p>
+                  <h2>Choose a book</h2>
+                </div>
+                <button
+                  className="bible-sheet-close"
+                  type="button"
+                  onClick={() => setIsBookSheetOpen(false)}
+                  aria-label="Close book picker"
+                >
+                  ×
+                </button>
+              </div>
+              <div className="bible-book-sheet__list">
+                {books.map((book, index) => (
+                  <button
+                    type="button"
+                    key={book.id}
+                    className={`bible-book bible-book--sheet ${book.id === selectedBookId ? "is-selected" : ""}`}
+                    onClick={() => handleBookChange(book.id)}
+                    aria-pressed={book.id === selectedBookId}
+                  >
+                    <span className="bible-book__number">{padNumber(index + 1)}</span>
+                    <span>{book.name}</span>
+                    {book.id === selectedBookId && <span className="bible-book__check">✓</span>}
+                  </button>
+                ))}
+              </div>
+            </section>
+          </div>
+        )}
       </div>
+    </div>
+  );
+}
+
+function ChapterSkeleton({ compact = false }: { compact?: boolean }) {
+  return (
+    <div className={`bible-skeleton ${compact ? "bible-skeleton--compact" : ""}`} aria-hidden="true">
+      <span className="bible-skeleton__line bible-skeleton__line--short" />
+      <span className="bible-skeleton__line" />
+      <span className="bible-skeleton__line" />
+      <span className="bible-skeleton__line bible-skeleton__line--medium" />
+      {!compact && <span className="bible-skeleton__line bible-skeleton__line--short" />}
     </div>
   );
 }
@@ -862,6 +1079,7 @@ function BibleStyles() {
         font: inherit;
         font-size: 0.87rem;
         font-weight: 700;
+        -webkit-tap-highlight-color: transparent;
       }
 
       .bible-button {
@@ -911,12 +1129,14 @@ function BibleStyles() {
       }
 
       .bible-font-control button {
-        min-width: 33px;
+        min-width: 40px;
+        min-height: 40px;
         border: 0;
         border-radius: 7px;
         color: var(--bible-muted);
         background: transparent;
         cursor: pointer;
+        -webkit-tap-highlight-color: transparent;
       }
 
       .bible-font-control button.is-selected {
@@ -966,6 +1186,7 @@ function BibleStyles() {
         max-height: calc(100vh - 174px);
         padding: 0 9px 10px;
         overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
       }
 
       .bible-book {
@@ -983,6 +1204,7 @@ function BibleStyles() {
         font-size: 0.84rem;
         text-align: left;
         cursor: pointer;
+        -webkit-tap-highlight-color: transparent;
       }
 
       .bible-book:hover {
@@ -1010,6 +1232,16 @@ function BibleStyles() {
       .bible-reader {
         min-width: 0;
         padding: 26px 30px 24px;
+        transition: opacity 180ms ease, transform 180ms ease;
+        touch-action: pan-y;
+      }
+
+      .bible-reader.is-loading {
+        opacity: 0.88;
+      }
+
+      .bible-reader.is-ready {
+        animation: bible-reader-in 220ms ease both;
       }
 
       .bible-reader__topline {
@@ -1073,6 +1305,11 @@ function BibleStyles() {
         border-color: var(--bible-gold);
       }
 
+      .bible-mobile-books-trigger,
+      .bible-swipe-hint {
+        display: none;
+      }
+
       .bible-verse-list {
         border-top: 1px solid var(--bible-border);
       }
@@ -1103,14 +1340,20 @@ function BibleStyles() {
       }
 
       .bible-verse__bookmark {
+        display: grid;
+        width: 44px;
+        height: 44px;
+        place-items: center;
+        margin: -10px 0 0 -8px;
         align-self: start;
-        padding: 2px 0;
+        padding: 0;
         border: 0;
         color: #60566e;
         background: transparent;
         font-size: 1rem;
         cursor: pointer;
         transition: color 160ms ease, transform 160ms ease;
+        -webkit-tap-highlight-color: transparent;
       }
 
       .bible-verse__bookmark:hover,
@@ -1235,6 +1478,46 @@ function BibleStyles() {
         margin: 0;
       }
 
+      .bible-book-sheet,
+      .bible-sheet-backdrop {
+        display: none;
+      }
+
+      .bible-skeleton {
+        display: grid;
+        width: min(440px, 100%);
+        gap: 13px;
+        padding: 8px 0;
+      }
+
+      .bible-skeleton--compact {
+        width: 100%;
+        padding: 22px 0;
+      }
+
+      .bible-skeleton__line {
+        display: block;
+        width: 100%;
+        height: 15px;
+        border-radius: 7px;
+        background: linear-gradient(
+          90deg,
+          rgba(255, 255, 255, 0.06) 25%,
+          rgba(245, 193, 78, 0.16) 50%,
+          rgba(255, 255, 255, 0.06) 75%
+        );
+        background-size: 200% 100%;
+        animation: bible-skeleton-shimmer 1.25s ease-in-out infinite;
+      }
+
+      .bible-skeleton__line--short {
+        width: 34%;
+      }
+
+      .bible-skeleton__line--medium {
+        width: 72%;
+      }
+
       .bible-state {
         display: grid;
         min-height: 65vh;
@@ -1284,6 +1567,16 @@ function BibleStyles() {
         to { transform: rotate(360deg); }
       }
 
+      @keyframes bible-skeleton-shimmer {
+        from { background-position: 200% 0; }
+        to { background-position: -200% 0; }
+      }
+
+      @keyframes bible-reader-in {
+        from { opacity: 0.65; transform: translateY(4px); }
+        to { opacity: 1; transform: translateY(0); }
+      }
+
       @media (max-width: 860px) {
         .bible-reader-layout {
           grid-template-columns: 1fr;
@@ -1298,6 +1591,10 @@ function BibleStyles() {
           display: grid;
           grid-template-columns: repeat(2, minmax(0, 1fr));
           max-height: 240px;
+        }
+
+        .bible-book {
+          min-height: 48px;
         }
       }
 
@@ -1335,6 +1632,141 @@ function BibleStyles() {
           border-radius: 12px;
         }
 
+        .bible-sidebar {
+          display: none;
+        }
+
+        .bible-mobile-books-trigger {
+          display: grid;
+          grid-template-columns: auto minmax(0, 1fr) auto;
+          align-items: center;
+          width: 100%;
+          min-height: 54px;
+          gap: 10px;
+          margin: 18px 0 2px;
+          padding: 8px 13px;
+          border: 1px solid rgba(245, 193, 78, 0.32);
+          border-radius: 10px;
+          color: var(--bible-muted);
+          background: rgba(245, 193, 78, 0.08);
+          font: inherit;
+          font-size: 0.76rem;
+          text-align: left;
+          cursor: pointer;
+          -webkit-tap-highlight-color: transparent;
+        }
+
+        .bible-mobile-books-trigger strong {
+          min-width: 0;
+          overflow: hidden;
+          color: var(--bible-text);
+          font-size: 0.9rem;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
+
+        .bible-mobile-books-trigger > span:last-child {
+          color: var(--bible-gold);
+          font-size: 1.25rem;
+        }
+
+        .bible-swipe-hint {
+          display: block;
+          margin: 15px 0 -8px;
+          color: #766c82;
+          font-size: 0.68rem;
+          text-align: center;
+        }
+
+        .bible-sheet-backdrop {
+          position: fixed;
+          z-index: 100;
+          inset: 0;
+          display: flex;
+          align-items: flex-end;
+          background: rgba(5, 3, 12, 0.66);
+          animation: bible-backdrop-in 160ms ease both;
+        }
+
+        .bible-book-sheet {
+          display: block;
+          width: 100%;
+          max-height: 620px;
+          max-height: min(76vh, 620px);
+          padding: 10px 14px 16px;
+          padding-bottom: calc(16px + env(safe-area-inset-bottom));
+          overflow: hidden;
+          border-radius: 20px 20px 0 0;
+          color: var(--bible-text);
+          background: #1a122c;
+          box-shadow: 0 -20px 60px rgba(0, 0, 0, 0.38);
+          animation: bible-sheet-up 220ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+        }
+
+        .bible-book-sheet__handle {
+          width: 42px;
+          height: 4px;
+          margin: 0 auto 14px;
+          border-radius: 3px;
+          background: rgba(255, 255, 255, 0.24);
+        }
+
+        .bible-book-sheet__heading {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 12px;
+          padding: 0 4px 12px;
+        }
+
+        .bible-book-sheet__heading h2 {
+          margin: 0;
+          font-size: 1.35rem;
+          letter-spacing: -0.03em;
+        }
+
+        .bible-sheet-close {
+          display: grid;
+          width: 44px;
+          height: 44px;
+          place-items: center;
+          border: 1px solid var(--bible-border);
+          border-radius: 50%;
+          color: var(--bible-text);
+          background: rgba(255, 255, 255, 0.06);
+          font-size: 1.5rem;
+          cursor: pointer;
+        }
+
+        .bible-book-sheet__list {
+          max-height: 515px;
+          max-height: calc(min(76vh, 620px) - 105px);
+          overflow-y: auto;
+          -webkit-overflow-scrolling: touch;
+        }
+
+        .bible-book--sheet {
+          min-height: 52px;
+          padding: 0 11px;
+          font-size: 0.9rem;
+        }
+
+        .bible-book__check {
+          margin-left: auto;
+          color: var(--bible-gold);
+          font-size: 1.1rem;
+        }
+
+        @keyframes bible-backdrop-in {
+          from { opacity: 0; }
+          to { opacity: 1; }
+        }
+
+        @keyframes bible-sheet-up {
+          from { transform: translateY(100%); }
+          to { transform: translateY(0); }
+        }
+
         .bible-reader__heading {
           align-items: flex-start;
         }
@@ -1354,6 +1786,11 @@ function BibleStyles() {
           padding: 15px 0;
         }
 
+        .bible-verse__bookmark {
+          margin-top: -10px;
+          margin-right: -7px;
+        }
+
         .bible-verse.is-bookmarked {
           margin: 0 -6px;
           padding-right: 8px;
@@ -1361,8 +1798,20 @@ function BibleStyles() {
         }
 
         .bible-reader__footer .bible-button {
+          min-width: 118px;
+          min-height: 52px;
           padding: 0 10px;
           font-size: 0.78rem;
+        }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        .bible-reader,
+        .bible-skeleton__line,
+        .bible-sheet-backdrop,
+        .bible-book-sheet {
+          animation: none;
+          transition: none;
         }
       }
     `}</style>
