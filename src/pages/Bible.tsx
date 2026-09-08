@@ -1062,6 +1062,11 @@ function BibleStyles() {
       }
 
       .bible-search__clear {
+        display: grid;
+        width: 44px;
+        min-width: 44px;
+        height: 44px;
+        place-items: center;
         border: 0;
         color: var(--bible-muted);
         background: transparent;
@@ -1290,7 +1295,7 @@ function BibleStyles() {
 
       .bible-chapter-select select {
         min-width: 70px;
-        min-height: 38px;
+        min-height: 44px;
         padding: 0 9px;
         border: 1px solid var(--bible-border);
         border-radius: 8px;
