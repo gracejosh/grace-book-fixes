@@ -22,7 +22,7 @@ const bottomNavLinks = [
 ];
 
 const drawerLinks = [
-  { to: '/verses', key: 'nav.bible', icon: BookOpen },
+  { to: '/bible', key: 'nav.bible', icon: BookOpen },
   { to: '/flyers', key: 'nav.flyers', icon: ImageIcon },
   { to: '/courses', key: 'nav.courses', icon: GraduationCap },
   { to: '/quiz', key: 'nav.quiz', icon: BrainCircuit },
