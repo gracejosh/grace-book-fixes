@@ -350,7 +350,7 @@ export default function Bible() {
   const [showBookmarksOnly, setShowBookmarksOnly] = useState(false);
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
   const [searching, setSearching] = useState(false);
-  const [isBookSheetOpen, setIsBookSheetOpen] = useState(false);
+  const [isBookDrawerOpen, setIsBookDrawerOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const chapterMemory = useRef<Record<string, Chapter>>({});
@@ -476,7 +476,7 @@ export default function Bible() {
     const nextBook = books.find((book) => book.id === bookId);
     setSelectedBookId(bookId);
     setSelectedChapterNumber(nextBook?.chapters[0]?.number || 1);
-    setIsBookSheetOpen(false);
+    setIsBookDrawerOpen(false);
   };
 
   const handleChapterChange = (chapterNumber: number) => {
@@ -786,9 +786,9 @@ export default function Bible() {
               <button
                 className="bible-mobile-books-trigger"
                 type="button"
-                onClick={() => setIsBookSheetOpen(true)}
+                onClick={() => setIsBookDrawerOpen(true)}
                 aria-haspopup="dialog"
-                aria-expanded={isBookSheetOpen}
+                aria-expanded={isBookDrawerOpen}
               >
                 <span>Browse books</span>
                 <strong>{selectedBook?.name || "Select a book"}</strong>
@@ -875,40 +875,39 @@ export default function Bible() {
           </div>
         )}
 
-        {isBookSheetOpen && (
+        {isBookDrawerOpen && (
           <div
-            className="bible-sheet-backdrop"
+            className="bible-drawer-backdrop"
             role="presentation"
-            onClick={() => setIsBookSheetOpen(false)}
+            onClick={() => setIsBookDrawerOpen(false)}
           >
             <section
-              className="bible-book-sheet"
+              className="bible-book-drawer"
               role="dialog"
               aria-modal="true"
               aria-label="Choose a Bible book"
               onClick={(event) => event.stopPropagation()}
             >
-              <div className="bible-book-sheet__handle" aria-hidden="true" />
-              <div className="bible-book-sheet__heading">
+              <div className="bible-book-drawer__heading">
                 <div>
                   <p className="bible-eyebrow">Navigate</p>
                   <h2>Choose a book</h2>
                 </div>
                 <button
-                  className="bible-sheet-close"
+                  className="bible-drawer-close"
                   type="button"
-                  onClick={() => setIsBookSheetOpen(false)}
+                  onClick={() => setIsBookDrawerOpen(false)}
                   aria-label="Close book picker"
                 >
                   ×
                 </button>
               </div>
-              <div className="bible-book-sheet__list">
+              <div className="bible-book-drawer__list">
                 {books.map((book, index) => (
                   <button
                     type="button"
                     key={book.id}
-                    className={`bible-book bible-book--sheet ${book.id === selectedBookId ? "is-selected" : ""}`}
+                    className={`bible-book bible-book--drawer ${book.id === selectedBookId ? "is-selected" : ""}`}
                     onClick={() => handleBookChange(book.id)}
                     aria-pressed={book.id === selectedBookId}
                   >
@@ -1483,8 +1482,8 @@ function BibleStyles() {
         margin: 0;
       }
 
-      .bible-book-sheet,
-      .bible-sheet-backdrop {
+      .bible-book-drawer,
+      .bible-drawer-backdrop {
         display: none;
       }
 
@@ -1683,45 +1682,37 @@ function BibleStyles() {
           text-align: center;
         }
 
-        .bible-sheet-backdrop {
+        .bible-drawer-backdrop {
           position: fixed;
           z-index: 100;
           inset: 0;
           display: flex;
-          align-items: flex-end;
+          align-items: stretch;
+          justify-content: flex-end;
           background: rgba(5, 3, 12, 0.66);
           animation: bible-backdrop-in 160ms ease both;
         }
 
-        .bible-book-sheet {
+        .bible-book-drawer {
           box-sizing: border-box;
-          display: block;
           display: flex;
           flex-direction: column;
-          width: 100%;
-          height: 76vh;
-          max-height: 620px;
-          min-height: 320px;
-          padding: 10px 14px 16px;
+          width: 86vw;
+          max-width: 360px;
+          height: 100%;
+          min-height: 0;
+          padding: 16px 14px;
+          padding-top: calc(16px + env(safe-area-inset-top));
           padding-bottom: calc(16px + env(safe-area-inset-bottom));
           overflow: hidden;
-          border-radius: 20px 20px 0 0;
+          border-radius: 20px 0 0 20px;
           color: var(--bible-text);
           background: #1a122c;
-          box-shadow: 0 -20px 60px rgba(0, 0, 0, 0.38);
-          animation: bible-sheet-up 220ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+          box-shadow: -20px 0 60px rgba(0, 0, 0, 0.38);
+          animation: bible-drawer-in 220ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
         }
 
-        .bible-book-sheet__handle {
-          flex: 0 0 auto;
-          width: 42px;
-          height: 4px;
-          margin: 0 auto 14px;
-          border-radius: 3px;
-          background: rgba(255, 255, 255, 0.24);
-        }
-
-        .bible-book-sheet__heading {
+        .bible-book-drawer__heading {
           flex: 0 0 auto;
           display: flex;
           align-items: center;
@@ -1730,13 +1721,13 @@ function BibleStyles() {
           padding: 0 4px 12px;
         }
 
-        .bible-book-sheet__heading h2 {
+        .bible-book-drawer__heading h2 {
           margin: 0;
           font-size: 1.35rem;
           letter-spacing: -0.03em;
         }
 
-        .bible-sheet-close {
+        .bible-drawer-close {
           display: grid;
           width: 44px;
           height: 44px;
@@ -1749,7 +1740,7 @@ function BibleStyles() {
           cursor: pointer;
         }
 
-        .bible-book-sheet__list {
+        .bible-book-drawer__list {
           box-sizing: border-box;
           flex: 1 1 auto;
           min-height: 0;
@@ -1761,7 +1752,7 @@ function BibleStyles() {
           touch-action: pan-y;
         }
 
-        .bible-book--sheet {
+        .bible-book--drawer {
           min-height: 52px;
           padding: 0 11px;
           font-size: 0.9rem;
@@ -1778,9 +1769,9 @@ function BibleStyles() {
           to { opacity: 1; }
         }
 
-        @keyframes bible-sheet-up {
-          from { transform: translateY(100%); }
-          to { transform: translateY(0); }
+        @keyframes bible-drawer-in {
+          from { transform: translateX(100%); }
+          to { transform: translateX(0); }
         }
 
         .bible-reader__heading {
@@ -1824,8 +1815,8 @@ function BibleStyles() {
       @media (prefers-reduced-motion: reduce) {
         .bible-reader,
         .bible-skeleton__line,
-        .bible-sheet-backdrop,
-        .bible-book-sheet {
+        .bible-drawer-backdrop,
+        .bible-book-drawer {
           animation: none;
           transition: none;
         }
