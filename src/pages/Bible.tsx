@@ -1694,10 +1694,14 @@ function BibleStyles() {
         }
 
         .bible-book-sheet {
+          box-sizing: border-box;
           display: block;
+          display: flex;
+          flex-direction: column;
           width: 100%;
+          height: 76vh;
           max-height: 620px;
-          max-height: min(76vh, 620px);
+          min-height: 320px;
           padding: 10px 14px 16px;
           padding-bottom: calc(16px + env(safe-area-inset-bottom));
           overflow: hidden;
@@ -1709,6 +1713,7 @@ function BibleStyles() {
         }
 
         .bible-book-sheet__handle {
+          flex: 0 0 auto;
           width: 42px;
           height: 4px;
           margin: 0 auto 14px;
@@ -1717,6 +1722,7 @@ function BibleStyles() {
         }
 
         .bible-book-sheet__heading {
+          flex: 0 0 auto;
           display: flex;
           align-items: center;
           justify-content: space-between;
@@ -1744,10 +1750,15 @@ function BibleStyles() {
         }
 
         .bible-book-sheet__list {
-          max-height: 515px;
-          max-height: calc(min(76vh, 620px) - 105px);
-          overflow-y: auto;
+          box-sizing: border-box;
+          flex: 1 1 auto;
+          min-height: 0;
+          height: 0;
+          overflow-x: hidden;
+          overflow-y: scroll;
           -webkit-overflow-scrolling: touch;
+          -webkit-transform: translateZ(0);
+          touch-action: pan-y;
         }
 
         .bible-book--sheet {
