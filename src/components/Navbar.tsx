@@ -14,7 +14,7 @@ import { useLang } from '@/context/LanguageContext';
 const LOGO_URL = 'https://raw.githubusercontent.com/gracejosh/grace-book-fixes/5cf59f361da74053f2131bd04d4964123cdb927f/grace-logo.png';
 
 const bottomNavLinks = [
-  { to: '/', key: 'nav.home', icon: Home },
+  { to: '/bible', key: 'nav.bible', icon: BookOpen },
   { to: '/books', key: 'nav.books', icon: Library },
   { to: '/posts', key: 'nav.posts', icon: MessageCircle },
   { to: '/chat', key: 'nav.chat', icon: MessageCircle },
