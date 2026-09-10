@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { supabase, uploadToCloudinary } from '@/lib/supabase';
 import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/context/ToastContext';
+import { filterText } from '@/lib/profanityFilter';
 import type { ChatRoom, Message, Profile } from '@/types';
 import {
   MessageCircle, Send, Plus, Users, Hash, Lock, Search, Smile,
@@ -214,11 +215,19 @@ export default function Chat() {
       showToast('Daily limit reached. Read a Bible or Book instead!', 'warning');
       return;
     }
+    const msgResult = filterText(newMessage);
+    if (msgResult.blocked) {
+      showToast('Please keep it respectful', 'warning');
+      return;
+    }
+    if (msgResult.hasProfanity) {
+      showToast('Please keep it respectful', 'warning');
+    }
     setSendingMessage(true);
     const { error } = await supabase.from('messages').insert({
       room_id: selectedRoom.id,
       sender_id: user.id,
-      content: newMessage.trim(),
+      content: msgResult.cleaned.trim(),
       reply_to: replyTo?.id ?? null,
       is_read: false,
     });
@@ -317,7 +326,15 @@ export default function Chat() {
 
   const saveEdit = async (msgId: string) => {
     if (!editText.trim()) return;
-    await supabase.from('messages').update({ content: editText.trim() }).eq('id', msgId);
+    const editResult = filterText(editText);
+    if (editResult.blocked) {
+      showToast('Please keep it respectful', 'warning');
+      return;
+    }
+    if (editResult.hasProfanity) {
+      showToast('Please keep it respectful', 'warning');
+    }
+    await supabase.from('messages').update({ content: editResult.cleaned.trim() }).eq('id', msgId);
     setEditingId(null); setEditText('');
     showToast('Message updated', 'success');
   };

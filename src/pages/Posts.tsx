@@ -4,6 +4,7 @@ import { supabase, uploadToCloudinary } from '@/lib/supabase';
 import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/context/ToastContext';
 import { useOfflineCache } from '@/hooks/useOfflineCache';
+import { filterText } from '@/lib/profanityFilter';
 import type { Post, PostType, Profile } from '@/types';
 import {
   Heart, Share2, Download, FileText, Image as ImageIcon, Headphones,
@@ -490,12 +491,21 @@ function UploadModal({ onClose, onUploaded, showToast }: {
       showToast('Please upload a file', 'warning');
       return;
     }
+    const titleResult = filterText(title);
+    const contentResult = type === 'text' ? filterText(content) : null;
+    if (contentResult?.blocked || titleResult.blocked) {
+      showToast('Please keep it respectful', 'warning');
+      return;
+    }
+    if (titleResult.hasProfanity || contentResult?.hasProfanity) {
+      showToast('Please keep it respectful', 'warning');
+    }
     setSaving(true);
     const { error } = await supabase.from('posts').insert({
       user_id: user!.id,
       type,
-      title: title.trim() || null,
-      content: type === 'text' ? content.trim() : null,
+      title: titleResult.cleaned.trim() || null,
+      content: contentResult ? contentResult.cleaned.trim() : null,
       media_url: mediaUrl || null,
       file_name: fileName || null,
       file_size: fileSize,

@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { supabase, uploadToCloudinary } from '@/lib/supabase';
 import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/context/ToastContext';
+import { filterText } from '@/lib/profanityFilter';
 import type { Blog, BlogComment, Profile } from '@/types';
 import { Newspaper, Heart, Share2, Upload, X, MessageCircle, Send, Play, Image as ImageIcon, Video } from 'lucide-react';
 import { SkeletonCard, EmptyState } from '@/components/ui';
@@ -69,9 +70,17 @@ export default function Blog() {
 
   const submitComment = async () => {
     if (!user || !selectedBlog || !newComment.trim()) return;
+    const commentResult = filterText(newComment);
+    if (commentResult.blocked) {
+      showToast('Please keep it respectful', 'warning');
+      return;
+    }
+    if (commentResult.hasProfanity) {
+      showToast('Please keep it respectful', 'warning');
+    }
     const { data, error } = await supabase.from('blog_comments').insert({
       blog_id: selectedBlog.id,
-      content: newComment.trim(),
+      content: commentResult.cleaned.trim(),
     }).select().single();
     if (error) {
       showToast('Could not post comment', 'error');
@@ -127,9 +136,18 @@ export default function Blog() {
       showToast('Title and content required', 'error');
       return;
     }
+    const blogTitleResult = filterText(form.title);
+    const blogContentResult = filterText(form.content);
+    if (blogTitleResult.blocked || blogContentResult.blocked) {
+      showToast('Please keep it respectful', 'warning');
+      return;
+    }
+    if (blogTitleResult.hasProfanity || blogContentResult.hasProfanity) {
+      showToast('Please keep it respectful', 'warning');
+    }
     const { data, error } = await supabase.from('blogs').insert({
-      title: form.title.trim(),
-      content: form.content.trim(),
+      title: blogTitleResult.cleaned.trim(),
+      content: blogContentResult.cleaned.trim(),
       image_url: form.image_url || null,
       video_url: form.video_url || null,
       category: form.category,
