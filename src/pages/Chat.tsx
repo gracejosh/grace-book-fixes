@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { supabase, uploadToCloudinary } from '@/lib/supabase';
 import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/context/ToastContext';
+import { useOffline } from '@/context/OfflineContext';
 import type { ChatRoom, Message, Profile } from '@/types';
 import {
   MessageCircle, Send, Plus, Users, Hash, Lock, Search, Smile,
@@ -18,6 +19,7 @@ const DAILY_MESSAGE_LIMIT = 50;
 export default function Chat() {
   const { user, profile } = useAuth();
   const { showToast } = useToast();
+  const { isOnline } = useOffline();
   const [rooms, setRooms] = useState<ChatRoom[]>([]);
   const [selectedRoom, setSelectedRoom] = useState<ChatRoom | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -210,6 +212,7 @@ export default function Chat() {
 
   const sendMessage = async () => {
     if (!user || !selectedRoom || !newMessage.trim()) return;
+    if (!isOnline) { showToast('You are offline. Connect to send messages.', 'warning'); return; }
     if (messagesLeft <= 0) {
       showToast('Daily limit reached. Read a Bible or Book instead!', 'warning');
       return;
@@ -235,6 +238,7 @@ export default function Chat() {
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !user || !selectedRoom) return;
+    if (!isOnline) { showToast('You are offline. Connect to upload images.', 'warning'); return; }
     if (file.size > MAX_FILE_SIZE) {
       showToast('Image must be under 5MB', 'error');
       return;
@@ -264,6 +268,7 @@ export default function Chat() {
   };
 
   const startRecording = async () => {
+    if (!isOnline) { showToast('You are offline. Connect to send voice messages.', 'warning'); return; }
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       const recorder = new MediaRecorder(stream);
@@ -625,19 +630,19 @@ export default function Chat() {
             <div className="p-4 border-t border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900">
               <div className="flex items-center gap-2">
                 <button onClick={() => setShowEmoji(!showEmoji)} className="p-2.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors" title="Emoji"><Smile className="h-5 w-5 text-slate-400" /></button>
-                <button onClick={() => fileInputRef.current?.click()} disabled={messagesLeft <= 0} className="p-2.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors disabled:opacity-50" title="Send image"><ImageIcon className="h-5 w-5 text-slate-400" /></button>
+                <button onClick={() => fileInputRef.current?.click()} disabled={messagesLeft <= 0 || !isOnline} className="p-2.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors disabled:opacity-50" title="Send image"><ImageIcon className="h-5 w-5 text-slate-400" /></button>
                 <input ref={fileInputRef} type="file" onChange={handleFileUpload} className="hidden" accept="image/*" />
                 <input value={newMessage} onChange={onInputChange}
                   onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); } }}
-                  placeholder={messagesLeft <= 0 ? 'Daily limit reached' : 'Type a message...'}
-                  className="flex-1 input-field py-2.5" disabled={sendingMessage || messagesLeft <= 0} />
+                  placeholder={messagesLeft <= 0 ? 'Daily limit reached' : isOnline ? 'Type a message...' : 'Offline - messaging disabled'}
+                  className="flex-1 input-field py-2.5" disabled={sendingMessage || messagesLeft <= 0 || !isOnline} />
                 <button onClick={isRecording ? stopRecording : startRecording}
-                  disabled={messagesLeft <= 0}
+                  disabled={messagesLeft <= 0 || !isOnline}
                   className={`p-2.5 rounded-xl transition-colors disabled:opacity-50 ${isRecording ? 'bg-red-500 text-white' : 'hover:bg-slate-100 dark:hover:bg-slate-800'}`}
                   title={isRecording ? 'Stop recording' : 'Voice message'}>
                   {isRecording ? <Square className="h-5 w-5" /> : <Mic className="h-5 w-5 text-slate-400" />}
                 </button>
-                <button onClick={sendMessage} disabled={!newMessage.trim() || sendingMessage || messagesLeft <= 0}
+                <button onClick={sendMessage} disabled={!newMessage.trim() || sendingMessage || messagesLeft <= 0 || !isOnline}
                   className="p-2.5 rounded-xl bg-gradient-to-r from-primary-600 to-primary-700 text-white disabled:opacity-50 hover:scale-105 transition-transform">
                   {sendingMessage ? <Loader className="h-5 w-5 animate-spin" /> : <Send className="h-5 w-5" />}
                 </button>
