@@ -1,10 +1,10 @@
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useToast } from '@/context/ToastContext';
 import { EmptyState } from '@/components/ui';
 import {
   Notebook as NotebookIcon, Plus, Trash2, X, Pencil,
-  Image as ImageIcon, Calendar, Palette, Check,
+  Image as ImageIcon, Calendar, Palette, Check, Search,
 } from 'lucide-react';
 
 interface Note {
@@ -20,12 +20,11 @@ interface Note {
 const STORAGE_KEY = 'grace-notebook-notes';
 
 const COLORS = [
-  { name: 'Default', value: 'default', class: 'bg-white dark:bg-slate-800', dot: 'bg-slate-400' },
-  { name: 'Yellow', value: 'yellow', class: 'bg-amber-50 dark:bg-amber-900/20', dot: 'bg-amber-400' },
-  { name: 'Green', value: 'green', class: 'bg-emerald-50 dark:bg-emerald-900/20', dot: 'bg-emerald-400' },
-  { name: 'Blue', value: 'blue', class: 'bg-sky-50 dark:bg-sky-900/20', dot: 'bg-sky-400' },
-  { name: 'Pink', value: 'pink', class: 'bg-pink-50 dark:bg-pink-900/20', dot: 'bg-pink-400' },
-  { name: 'Purple', value: 'purple', class: 'bg-violet-50 dark:bg-violet-900/20', dot: 'bg-violet-400' },
+  { name: 'Gold',    value: 'gold',    class: 'bg-gold-50 dark:bg-gold-900/20',    dot: 'bg-gold-400' },
+  { name: 'Purple',  value: 'purple',  class: 'bg-primary-50 dark:bg-primary-900/20', dot: 'bg-primary-400' },
+  { name: 'Green',   value: 'green',   class: 'bg-emerald-50 dark:bg-emerald-900/20', dot: 'bg-emerald-400' },
+  { name: 'Blue',    value: 'blue',    class: 'bg-sky-50 dark:bg-sky-900/20',     dot: 'bg-sky-400' },
+  { name: 'Rose',    value: 'rose',    class: 'bg-rose-50 dark:bg-rose-900/20',   dot: 'bg-rose-400' },
 ];
 
 const colorClassMap = Object.fromEntries(COLORS.map((c) => [c.value, c.class]));
@@ -62,10 +61,11 @@ export default function Notebook() {
   const [notes, setNotes] = useState<Note[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [search, setSearch] = useState('');
   const [form, setForm] = useState({
     title: '',
     content: '',
-    color: 'default',
+    color: 'gold',
     image: null as string | null,
   });
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -79,9 +79,19 @@ export default function Notebook() {
     saveNotes(updated);
   };
 
+  const filteredNotes = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return notes;
+    return notes.filter(
+      (n) =>
+        n.title.toLowerCase().includes(q) ||
+        n.content.toLowerCase().includes(q),
+    );
+  }, [notes, search]);
+
   const openNew = () => {
     setEditingId(null);
-    setForm({ title: '', content: '', color: 'default', image: null });
+    setForm({ title: '', content: '', color: 'gold', image: null });
     setShowForm(true);
   };
 
@@ -151,7 +161,7 @@ export default function Notebook() {
       showToast('Note saved', 'success');
     }
 
-    setForm({ title: '', content: '', color: 'default', image: null });
+    setForm({ title: '', content: '', color: 'gold', image: null });
     setShowForm(false);
     setEditingId(null);
   };
@@ -163,6 +173,7 @@ export default function Notebook() {
 
   return (
     <div className="px-4 py-6 max-w-4xl mx-auto">
+      {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold flex items-center gap-2">
           <NotebookIcon className="h-6 w-6 text-primary-600" /> Notebook
@@ -172,6 +183,20 @@ export default function Notebook() {
         </button>
       </div>
 
+      {/* Search */}
+      {notes.length > 0 && (
+        <div className="relative mb-6">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search notes..."
+            className="input-field pl-10"
+          />
+        </div>
+      )}
+
+      {/* Form */}
       <AnimatePresence>
         {showForm && (
           <motion.div
@@ -217,7 +242,7 @@ export default function Notebook() {
                 </div>
               )}
 
-              {/* Color picker */}
+              {/* Color picker — 5 marks */}
               <div className="flex items-center gap-2 flex-wrap">
                 <Palette className="h-4 w-4 text-slate-400" />
                 {COLORS.map((c) => (
@@ -253,6 +278,7 @@ export default function Notebook() {
         )}
       </AnimatePresence>
 
+      {/* Notes list */}
       {notes.length === 0 ? (
         <EmptyState
           icon={<NotebookIcon className="h-8 w-8 text-primary-500" />}
@@ -264,14 +290,19 @@ export default function Notebook() {
             </button>
           }
         />
+      ) : filteredNotes.length === 0 ? (
+        <div className="text-center py-12 text-slate-400">
+          <Search className="h-8 w-8 mx-auto mb-2 opacity-50" />
+          <p>No notes match your search.</p>
+        </div>
       ) : (
         <div className="grid sm:grid-cols-2 gap-4">
-          {notes.map((note) => (
+          {filteredNotes.map((note) => (
             <motion.div
               key={note.id}
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
-              className={`rounded-2xl p-4 border border-slate-200 dark:border-slate-700 shadow-sm group ${colorClassMap[note.color] ?? colorClassMap.default}`}
+              className={`rounded-2xl p-4 border border-slate-200 dark:border-slate-700 shadow-sm group ${colorClassMap[note.color] ?? colorClassMap.gold}`}
             >
               <div className="flex items-start justify-between gap-2 mb-2">
                 <h3 className="font-bold text-sm">{note.title}</h3>
