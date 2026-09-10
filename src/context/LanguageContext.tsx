@@ -29,6 +29,8 @@ export const translations: Record<string, { en: string; am: string }> = {
   'nav.live': { en: 'Live', am: 'ቀጥታ' },
   'nav.donate': { en: 'Donate', am: 'ይለግሱ' },
   'nav.settings': { en: 'Settings', am: 'ቅንብሮች' },
+  'nav.terms': { en: 'Terms of Use', am: 'የአጠቃቀም ደንቦች' },
+  'nav.privacy': { en: 'Privacy Policy', am: 'የግላዊነት ፖሊሲ' },
   'nav.signIn': { en: 'Sign In', am: 'ግባ' },
   'common.search': { en: 'Search', am: 'ፈልግ' },
   'common.download': { en: 'Download', am: 'አውርድ' },

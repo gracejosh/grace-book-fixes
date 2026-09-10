@@ -4,7 +4,7 @@ import {
   Home, Library, MessageCircle, User, Moon, Sun, Menu, X, Coffee,
   Image as ImageIcon, GraduationCap, BrainCircuit, Newspaper,
   Sparkles, Settings as SettingsIcon, ChevronRight,
-  BookOpen, NotebookPen, Radio, Heart,
+  BookOpen, NotebookPen, Radio, Heart, FileText, Shield,
 } from 'lucide-react';
 import { useState } from 'react';
 import { useTheme } from '@/context/ThemeContext';
@@ -32,6 +32,8 @@ const drawerLinks = [
   { to: '/live', key: 'nav.live', icon: Radio },
   { to: '/donate', key: 'nav.donate', icon: Heart },
   { to: '/about', key: 'nav.about', icon: Sparkles },
+  { to: '/terms', key: 'nav.terms', icon: FileText },
+  { to: '/privacy', key: 'nav.privacy', icon: Shield },
   { to: '/settings', key: 'nav.settings', icon: SettingsIcon },
 ];
 
