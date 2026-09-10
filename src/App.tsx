@@ -6,7 +6,6 @@ import { ToastProvider } from '@/context/ToastContext';
 import { LanguageProvider } from '@/context/LanguageContext';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import Navbar from '@/components/Navbar';
-import Footer from '@/components/Footer';
 import ScrollToTop from '@/components/ScrollToTop';
 import AdPopup from '@/components/AdPopup';
 import Home from '@/pages/Home';
@@ -63,7 +62,6 @@ export default function App() {
                       <Route path="*" element={<NotFound />} />
                     </Routes>
                   </main>
-                  <Footer />
                   <AdPopup />
                 </div>
               </BrowserRouter>
