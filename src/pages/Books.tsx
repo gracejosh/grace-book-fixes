@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
 import { Search, Filter, Download, ShoppingCart, RefreshCw } from 'lucide-react';
+import { useOfflineCache } from '@/hooks/useOfflineCache';
 
 interface Book {
   id: string;
@@ -24,10 +25,15 @@ const Books: React.FC = () => {
   const [sortBy, setSortBy] = useState<'newest' | 'oldest' | 'title' | 'author'>('newest');
   const [category, setCategory] = useState<string>('all');
   const [categories, setCategories] = useState<string[]>([]);
+  const { isOnline, cacheItems, loadFromCache } = useOfflineCache<Book>('books', 50);
 
   const fetchBooks = useCallback(async () => {
     setLoading(true);
     setError(null);
+    if (!isOnline) {
+      const cached = await loadFromCache();
+      if (cached) { setBooks(cached); setLoading(false); return; }
+    }
     try {
       const { data, error } = await supabase
         .from('books')
@@ -37,12 +43,14 @@ const Books: React.FC = () => {
       if (error) throw error;
 
       setBooks(data || []);
+      cacheItems(data || []);
       
       // Extract unique categories
       const cats = Array.from(new Set((data || []).map(book => book.category).filter(Boolean)));
       setCategories(cats as string[]);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to fetch books');
+      const cached = await loadFromCache();
+      if (cached) { setBooks(cached); setError(null); } else { setError(err instanceof Error ? err.message : 'Failed to fetch books'); }
     } finally {
       setLoading(false);
     }

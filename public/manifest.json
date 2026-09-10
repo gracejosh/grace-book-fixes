@@ -1,17 +1,44 @@
 {
-  "name": "Grace Book",
+  "name": "Grace Book — Faith Companion",
   "short_name": "Grace Book",
-  "description": "Your premium Christian faith companion",
+  "description": "Your premium Christian faith companion — Bible, books, courses, and community. Works offline.",
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
+  "orientation": "portrait-primary",
   "background_color": "#0f0a1e",
   "theme_color": "#7c3aed",
+  "categories": ["books", "education", "lifestyle"],
   "icons": [
     {
       "src": "/favicon.svg",
       "sizes": "any",
       "type": "image/svg+xml",
-      "purpose": "any maskable"
+      "purpose": "any"
+    },
+    {
+      "src": "/grace-logo.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/grace-logo.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/grace-logo.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/grace-logo.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
     }
   ]
 }

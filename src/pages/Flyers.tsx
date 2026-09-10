@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { supabase, uploadToCloudinary } from '@/lib/supabase';
 import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/context/ToastContext';
+import { useOfflineCache } from '@/hooks/useOfflineCache';
 import { useLang } from '@/context/LanguageContext';
 import type { Flyer, Profile } from '@/types';
 import { EmptyState } from '@/components/ui';
@@ -33,6 +34,7 @@ export default function Flyers() {
   const { user, profile } = useAuth();
   const { showToast } = useToast();
   const { t } = useLang();
+  const { isOnline, cacheItems, loadFromCache } = useOfflineCache<Flyer>('flyers', 20);
   const [flyers, setFlyers] = useState<Flyer[]>([]);
   const [authors, setAuthors] = useState<Record<string, Profile>>({});
   const [loading, setLoading] = useState(true);
@@ -44,6 +46,10 @@ export default function Flyers() {
 
   const loadFlyers = useCallback(async () => {
     setLoading(true);
+    if (!isOnline) {
+      const cached = await loadFromCache();
+      if (cached) { setFlyers(cached); setLoading(false); return; }
+    }
     const { data, error } = await supabase
       .from('flyers')
       .select('*')

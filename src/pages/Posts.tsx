@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { supabase, uploadToCloudinary } from '@/lib/supabase';
 import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/context/ToastContext';
+import { useOfflineCache } from '@/hooks/useOfflineCache';
 import type { Post, PostType, Profile } from '@/types';
 import {
   Heart, Share2, Download, FileText, Image as ImageIcon, Headphones,
@@ -50,6 +51,7 @@ const timeAgo = (date: string) => {
 export default function Posts() {
   const { user, profile } = useAuth();
   const { showToast } = useToast();
+  const { isOnline, cacheItems, loadFromCache } = useOfflineCache<Post>('posts', 50);
   const [posts, setPosts] = useState<Post[]>([]);
   const [authors, setAuthors] = useState<Record<string, Profile>>({});
   const [loading, setLoading] = useState(true);
