@@ -24,6 +24,8 @@ import Live from '@/pages/Live';
 import Notebook from '@/pages/Notebook';
 import Bible from '@/pages/Bible';
 import Donate from '@/pages/Donate';
+import Terms from '@/pages/Terms';
+import Privacy from '@/pages/Privacy';
 import NotFound from '@/pages/NotFound';
 
 export default function App() {
@@ -61,6 +63,8 @@ export default function App() {
                       <Route path="/notebook" element={<Notebook />} />
                       <Route path="/bible" element={<Bible />} />
                       <Route path="/donate" element={<Donate />} />
+                      <Route path="/terms" element={<Terms />} />
+                      <Route path="/privacy" element={<Privacy />} />
                       <Route path="*" element={<NotFound />} />
                     </Routes>
                   </main>

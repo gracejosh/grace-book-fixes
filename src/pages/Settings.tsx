@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion';
-import { Moon, Sun, Coffee, Languages, User, Info } from 'lucide-react';
+import { Moon, Sun, Coffee, Languages, User, Info, FileText, Shield } from 'lucide-react';
 import { useTheme, type Theme } from '@/context/ThemeContext';
 import { useLang } from '@/context/LanguageContext';
 import { useAuth } from '@/context/AuthContext';
@@ -88,6 +88,19 @@ export default function Settings() {
           <Link to="/about" className="flex items-center gap-3 p-3 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
             <Info className="h-5 w-5 text-slate-400" />
             <span className="text-sm font-medium">About Grace Book</span>
+          </Link>
+        </div>
+
+        {/* Legal */}
+        <div className="glass-card p-4">
+          <h2 className="font-semibold text-sm mb-3 text-slate-500 dark:text-slate-400 uppercase tracking-wide">Legal</h2>
+          <Link to="/terms" className="flex items-center gap-3 p-3 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
+            <FileText className="h-5 w-5 text-slate-400" />
+            <span className="text-sm font-medium">Terms of Use</span>
+          </Link>
+          <Link to="/privacy" className="flex items-center gap-3 p-3 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
+            <Shield className="h-5 w-5 text-slate-400" />
+            <span className="text-sm font-medium">Privacy Policy</span>
           </Link>
         </div>
 
