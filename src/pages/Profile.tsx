@@ -3,12 +3,14 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { supabase, uploadToCloudinary } from '@/lib/supabase';
 import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/context/ToastContext';
+import { useOffline } from '@/context/OfflineContext';
 import type { QuizResult, BookDownload, CourseProgress } from '@/types';
 import { User, Mail, Lock, Eye, EyeOff, Camera, Edit2, Save, X, Award, BookOpen, Download, GraduationCap, BrainCircuit, LogOut, KeyRound, Star } from 'lucide-react';
 
 export default function Profile() {
   const { user, profile, loading, signUp, signIn, signOut, refreshProfile } = useAuth();
   const { showToast } = useToast();
+  const { isOnline } = useOffline();
 
   if (loading) {
     return (
@@ -19,16 +21,17 @@ export default function Profile() {
   }
 
   if (!user) {
-    return <AuthForm onSignUp={signUp} onSignIn={signIn} showToast={showToast} />;
+    return <AuthForm onSignUp={signUp} onSignIn={signIn} showToast={showToast} isOnline={isOnline} />;
   }
 
   return <ProfileDashboard user={user} profile={profile} showToast={showToast} signOut={signOut} refreshProfile={refreshProfile} />;
 }
 
-function AuthForm({ onSignUp, onSignIn, showToast }: {
+function AuthForm({ onSignUp, onSignIn, showToast, isOnline }: {
   onSignUp: (e: string, p: string, u: string, f: string) => Promise<{ error: string | null }>;
   onSignIn: (e: string, p: string) => Promise<{ error: string | null }>;
   showToast: (m: string, t?: 'success' | 'error' | 'info' | 'warning') => void;
+  isOnline: boolean;
 }) {
   const [mode, setMode] = useState<'signin' | 'signup'>('signin');
   const [email, setEmail] = useState('');
@@ -40,6 +43,7 @@ function AuthForm({ onSignUp, onSignIn, showToast }: {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!isOnline) { showToast('You are offline. Connect to sign in.', 'warning'); return; }
     setLoading(true);
     if (mode === 'signup') {
       if (!username.trim()) {
@@ -82,6 +86,11 @@ function AuthForm({ onSignUp, onSignIn, showToast }: {
             </p>
           </div>
 
+          {!isOnline && (
+            <div className="mb-4 rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 px-4 py-3 text-sm text-amber-700 dark:text-amber-300 text-center">
+              You are offline. Sign in is disabled until you reconnect.
+            </div>
+          )}
           <form onSubmit={handleSubmit} className="space-y-4">
             {mode === 'signup' && (
               <>
@@ -119,7 +128,7 @@ function AuthForm({ onSignUp, onSignIn, showToast }: {
               </div>
             </div>
 
-            <button type="submit" disabled={loading} className="btn-primary w-full">
+            <button type="submit" disabled={loading || !isOnline} className="btn-primary w-full">
               {loading ? 'Please wait...' : mode === 'signin' ? 'Sign In' : 'Create Account'}
             </button>
           </form>
