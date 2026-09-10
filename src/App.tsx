@@ -4,6 +4,7 @@ import { ThemeProvider } from '@/context/ThemeContext';
 import { AuthProvider } from '@/context/AuthContext';
 import { ToastProvider } from '@/context/ToastContext';
 import { LanguageProvider } from '@/context/LanguageContext';
+import { OfflineProvider } from '@/context/OfflineContext';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import Navbar from '@/components/Navbar';
 import ScrollToTop from '@/components/ScrollToTop';
@@ -41,36 +42,38 @@ export default function App() {
         <LanguageProvider>
           <AuthProvider>
             <ToastProvider>
-              <BrowserRouter>
-                <ScrollToTop />
-                <div className="min-h-screen flex flex-col">
-                  <Navbar />
-                  <main className="flex-1 pt-14 pb-16">
-                    <Routes>
-                      <Route path="/" element={<Home />} />
-                      <Route path="/posts" element={<Posts />} />
-                      <Route path="/books" element={<Books />} />
-                      <Route path="/courses" element={<Courses />} />
-                      <Route path="/quiz" element={<Quiz />} />
-                      <Route path="/chat" element={<Chat />} />
-                      <Route path="/profile" element={<Profile />} />
-                      <Route path="/admin" element={<Admin />} />
-                      <Route path="/about" element={<About />} />
-                      <Route path="/flyers" element={<Flyers />} />
-                      <Route path="/blogs" element={<Blogs />} />
-                      <Route path="/settings" element={<Settings />} />
-                      <Route path="/live" element={<Live />} />
-                      <Route path="/notebook" element={<Notebook />} />
-                      <Route path="/bible" element={<Bible />} />
-                      <Route path="/donate" element={<Donate />} />
-                      <Route path="/terms" element={<Terms />} />
-                      <Route path="/privacy" element={<Privacy />} />
-                      <Route path="*" element={<NotFound />} />
-                    </Routes>
-                  </main>
-                  <AdPopup />
-                </div>
-              </BrowserRouter>
+              <OfflineProvider>
+                <BrowserRouter>
+                  <ScrollToTop />
+                  <div className="min-h-screen flex flex-col">
+                    <Navbar />
+                    <main className="flex-1 pt-14 pb-16">
+                      <Routes>
+                        <Route path="/" element={<Home />} />
+                        <Route path="/posts" element={<Posts />} />
+                        <Route path="/books" element={<Books />} />
+                        <Route path="/courses" element={<Courses />} />
+                        <Route path="/quiz" element={<Quiz />} />
+                        <Route path="/chat" element={<Chat />} />
+                        <Route path="/profile" element={<Profile />} />
+                        <Route path="/admin" element={<Admin />} />
+                        <Route path="/about" element={<About />} />
+                        <Route path="/flyers" element={<Flyers />} />
+                        <Route path="/blogs" element={<Blogs />} />
+                        <Route path="/settings" element={<Settings />} />
+                        <Route path="/live" element={<Live />} />
+                        <Route path="/notebook" element={<Notebook />} />
+                        <Route path="/bible" element={<Bible />} />
+                        <Route path="/donate" element={<Donate />} />
+                        <Route path="/terms" element={<Terms />} />
+                        <Route path="/privacy" element={<Privacy />} />
+                        <Route path="*" element={<NotFound />} />
+                      </Routes>
+                    </main>
+                    <AdPopup />
+                  </div>
+                </BrowserRouter>
+              </OfflineProvider>
             </ToastProvider>
           </AuthProvider>
         </LanguageProvider>
