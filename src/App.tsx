@@ -23,6 +23,7 @@ import Settings from '@/pages/Settings';
 import Live from '@/pages/Live';
 import Notebook from '@/pages/Notebook';
 import Bible from '@/pages/Bible';
+import Donate from '@/pages/Donate';
 import NotFound from '@/pages/NotFound';
 
 export default function App() {
@@ -59,6 +60,7 @@ export default function App() {
                       <Route path="/live" element={<Live />} />
                       <Route path="/notebook" element={<Notebook />} />
                       <Route path="/bible" element={<Bible />} />
+                      <Route path="/donate" element={<Donate />} />
                       <Route path="*" element={<NotFound />} />
                     </Routes>
                   </main>
