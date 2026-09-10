@@ -1,7 +1,7 @@
 import { Link, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  Home, Library, MessageCircle, User, Moon, Sun, Menu, X,
+  Home, Library, MessageCircle, User, Moon, Sun, Menu, X, Coffee,
   Image as ImageIcon, GraduationCap, BrainCircuit, Newspaper,
   Sparkles, Settings as SettingsIcon, ChevronRight,
   BookOpen, NotebookPen, Radio, Heart,
@@ -73,11 +73,17 @@ export default function Navbar() {
           aria-label="Toggle theme"
         >
           <AnimatePresence mode="wait">
-            {theme === 'light' ? (
+            {theme === 'dark' && (
               <motion.div key="moon" initial={{ rotate: -90, opacity: 0 }} animate={{ rotate: 0, opacity: 1 }} exit={{ rotate: 90, opacity: 0 }}>
                 <Moon className="h-5 w-5" />
               </motion.div>
-            ) : (
+            )}
+            {theme === 'coffee' && (
+              <motion.div key="coffee" initial={{ rotate: -90, opacity: 0 }} animate={{ rotate: 0, opacity: 1 }} exit={{ rotate: 90, opacity: 0 }}>
+                <Coffee className="h-5 w-5" />
+              </motion.div>
+            )}
+            {theme === 'light' && (
               <motion.div key="sun" initial={{ rotate: 90, opacity: 0 }} animate={{ rotate: 0, opacity: 1 }} exit={{ rotate: -90, opacity: 0 }}>
                 <Sun className="h-5 w-5" />
               </motion.div>
