@@ -1,6 +1,7 @@
 import { useState, useRef, useCallback } from 'react';
 import { UploadCloud, CheckCircle, Loader } from 'lucide-react';
 import { uploadToCloudinary } from '@/lib/supabase';
+import { useOffline } from '@/context/OfflineContext';
 
 interface UploadButtonProps {
   onUploaded: (url: string) => void;
@@ -17,6 +18,7 @@ export function UploadButton({
   label = 'Upload',
   currentUrl,
 }: UploadButtonProps) {
+  const { isOnline } = useOffline();
   const [progress, setProgress] = useState<number | null>(null);
   const [complete, setComplete] = useState(false);
   const [error, setError] = useState(false);
@@ -24,6 +26,10 @@ export function UploadButton({
 
   const handleFile = useCallback(
     async (file: File) => {
+      if (!isOnline) {
+        setError(true);
+        return;
+      }
       setProgress(0);
       setComplete(false);
       setError(false);
@@ -39,7 +45,7 @@ export function UploadButton({
         setProgress(null);
       }
     },
-    [onUploaded, resourceType],
+    [onUploaded, resourceType, isOnline],
   );
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -53,7 +59,7 @@ export function UploadButton({
       <button
         type="button"
         onClick={() => inputRef.current?.click()}
-        disabled={progress !== null}
+        disabled={progress !== null || !isOnline}
         className="w-full flex items-center justify-center gap-2 rounded-xl border border-dashed border-slate-300 dark:border-slate-600 px-4 py-3 text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-all disabled:opacity-50"
       >
         {progress !== null ? (
@@ -65,6 +71,11 @@ export function UploadButton({
           <>
             <CheckCircle className="h-4 w-4 text-emerald-500" />
             Complete ✓
+          </>
+        ) : !isOnline ? (
+          <>
+            <UploadCloud className="h-4 w-4" />
+            Upload disabled (offline)
           </>
         ) : (
           <>
@@ -91,7 +102,7 @@ export function UploadButton({
         </div>
       )}
 
-      {error && <p className="text-xs text-red-500 mt-1">Upload failed. Try again.</p>}
+      {error && <p className="text-xs text-red-500 mt-1">{!isOnline ? 'Upload disabled while offline.' : 'Upload failed. Try again.'}</p>}
 
       {currentUrl && progress === null && !complete && (
         <p className="text-xs text-emerald-500 mt-1 flex items-center gap-1">
