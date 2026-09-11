@@ -436,11 +436,19 @@ function QuizzesTab({ showToast }: { showToast: (m: string, t?: 'success' | 'err
   useEffect(() => { load(); }, []);
 
   const save = async () => {
-    const payload = { ...form, options: form.options.filter((o) => o.trim()) };
+    const payload = {
+      question: form.question.trim(),
+      options: form.options.filter((o) => o.trim()),
+      correct_answer: Number(form.correct_answer),
+      category: form.category,
+      difficulty: form.difficulty,
+    };
     if (editing) {
-      await supabase.from('quizzes').update(payload).eq('id', editing.id);
+      const { error } = await supabase.from('quizzes').update(payload).eq('id', editing.id);
+      if (error) { showToast('Could not update question: ' + error.message, 'error'); return; }
     } else {
-      await supabase.from('quizzes').insert(payload);
+      const { error } = await supabase.from('quizzes').insert(payload);
+      if (error) { showToast('Could not save question: ' + error.message, 'error'); return; }
     }
     showToast(editing ? 'Question updated' : 'Question added', 'success');
     setShowForm(false); setEditing(null);
