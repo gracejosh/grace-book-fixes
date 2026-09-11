@@ -37,7 +37,34 @@ import ProfilePage from '@/pages/ProfilePage';
 export default function App() {
   useEffect(() => {
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('/sw.js').catch(() => {});
+      navigator.serviceWorker
+        .register('/sw.js')
+        .then((registration) => {
+          // Check for updates every 60 seconds
+          setInterval(() => registration.update().catch(() => {}), 60000);
+
+          // When a new SW is found and installs, prompt it to skip waiting
+          registration.addEventListener('updatefound', () => {
+            const newWorker = registration.installing;
+            if (!newWorker) return;
+
+            newWorker.addEventListener('statechange', () => {
+              // New SW has finished installing and is waiting to activate
+              if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                newWorker.postMessage({ type: 'SKIP_WAITING' });
+              }
+            });
+          });
+        })
+        .catch(() => {});
+
+      // When the controlling SW changes (new SW activated), reload the page
+      let refreshing = false;
+      navigator.serviceWorker.addEventListener('controllerchange', () => {
+        if (refreshing) return;
+        refreshing = true;
+        window.location.reload();
+      });
     }
   }, []);
 

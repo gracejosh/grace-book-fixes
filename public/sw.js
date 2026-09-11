@@ -1,10 +1,10 @@
-const CACHE_VERSION = 'grace-book-v2';
+// Cache version rotates on every deploy via build-time injection.
+// Falls back to a timestamp-based version if not replaced.
+const CACHE_VERSION = 'grace-book-v3-' + (self.registration?.scope || '') + '-' + Date.now();
 const STATIC_CACHE = `${CACHE_VERSION}-static`;
 const BIBLE_CACHE = `${CACHE_VERSION}-bible`;
-const POSTS_CACHE = `${CACHE_VERSION}-posts`;
-const FLYERS_CACHE = `${CACHE_VERSION}-flyers`;
-const BOOKS_CACHE = `${CACHE_VERSION}-books`;
 const RUNTIME_CACHE = `${CACHE_VERSION}-runtime`;
+const IMAGE_CACHE = `${CACHE_VERSION}-image`;
 
 const APP_SHELL = [
   '/',
@@ -16,6 +16,7 @@ const APP_SHELL = [
 
 const BIBLE_URL = '/amharic_bible.json';
 
+// === INSTALL: pre-cache app shell ===
 self.addEventListener('install', (event) => {
   event.waitUntil(
     Promise.all([
@@ -26,6 +27,7 @@ self.addEventListener('install', (event) => {
   self.skipWaiting();
 });
 
+// === ACTIVATE: clean up ALL old caches, take control immediately ===
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then((keys) =>
@@ -39,39 +41,49 @@ self.addEventListener('activate', (event) => {
   self.clients.claim();
 });
 
+// === Message handler: skip waiting + custom cache messages ===
 self.addEventListener('message', (event) => {
-  if (event.data?.type === 'CACHE_POSTS') {
-    cacheJsonData(POSTS_CACHE, event.data.items, 'posts');
-  } else if (event.data?.type === 'CACHE_FLYERS') {
-    cacheJsonData(FLYERS_CACHE, event.data.items, 'flyers');
-  } else if (event.data?.type === 'CACHE_BOOKS') {
-    cacheJsonData(BOOKS_CACHE, event.data.items, 'books');
-  } else if (event.data?.type === 'CACHE_BIBLE') {
-    caches.open(BIBLE_CACHE).then((cache) => cache.add(BIBLE_URL).catch(() => {}));
+  if (event.data?.type === 'SKIP_WAITING') {
+    self.skipWaiting();
   } else if (event.data?.type === 'CLEAR_RUNTIME') {
     caches.delete(RUNTIME_CACHE);
+  } else if (event.data?.type === 'CACHE_BIBLE') {
+    caches.open(BIBLE_CACHE).then((cache) => cache.add(BIBLE_URL).catch(() => {}));
   }
 });
 
-async function cacheJsonData(cacheName, items, label) {
-  try {
-    const cache = await caches.open(cacheName);
-    const response = new Response(JSON.stringify(items), {
-      headers: { 'Content-Type': 'application/json' },
-    });
-    await cache.put(`/${label}-cache.json`, response);
-  } catch (e) {
-    // ignore
-  }
-}
-
+// === FETCH: route by request type ===
 self.addEventListener('fetch', (event) => {
   const { request } = event;
   if (request.method !== 'GET') return;
 
   const url = new URL(request.url);
 
-  // Bible JSON — cache-first
+  // --- Navigation requests (HTML pages): network-first, NEVER cache HTML at runtime ---
+  if (request.mode === 'navigate') {
+    event.respondWith(
+      fetch(request)
+        .then((response) => {
+          // Never cache HTML at runtime — always serve fresh from network
+          return response;
+        })
+        .catch(() => {
+          // Offline fallback: serve cached index.html if available
+          return caches.match('/index.html').then(
+            (cached) =>
+              cached ||
+              caches.match(request) ||
+              new Response('Offline', {
+                status: 503,
+                headers: { 'Content-Type': 'text/html' },
+              })
+          );
+        })
+    );
+    return;
+  }
+
+  // --- Bible JSON: cache-first (large file, changes rarely) ---
   if (url.pathname === BIBLE_URL) {
     event.respondWith(
       caches.match(BIBLE_URL).then((cached) => {
@@ -90,43 +102,91 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Same-origin static assets — cache-first with network update
-  if (url.origin === location.origin) {
-    // Don't cache Supabase API calls
-    if (url.pathname.startsWith('/rest/') || url.pathname.startsWith('/realtime/')) return;
+  // --- API calls (Supabase REST, realtime, etc.): network-first ---
+  if (
+    url.pathname.startsWith('/rest/') ||
+    url.pathname.startsWith('/realtime/') ||
+    url.pathname.startsWith('/functions/') ||
+    url.hostname.includes('supabase.co')
+  ) {
+    event.respondWith(
+      fetch(request)
+        .then((response) => {
+          const clone = response.clone();
+          caches.open(RUNTIME_CACHE).then((cache) => cache.put(request, clone));
+          return response;
+        })
+        .catch(() => caches.match(request))
+    );
+    return;
+  }
 
+  // --- Images (including cross-origin Cloudinary): cache-first ---
+  if (request.destination === 'image' || url.hostname.includes('cloudinary.com')) {
     event.respondWith(
       caches.match(request).then((cached) => {
-        const fetchPromise = fetch(request)
-          .then((response) => {
-            if (response && response.status === 200) {
-              const clone = response.clone();
-              caches.open(RUNTIME_CACHE).then((cache) => cache.put(request, clone));
-            }
-            return response;
-          })
-          .catch(() => cached);
-        return cached || fetchPromise;
+        if (cached) return cached;
+        return fetch(request).then((response) => {
+          if (response.ok) {
+            const clone = response.clone();
+            caches.open(IMAGE_CACHE).then((cache) => cache.put(request, clone));
+          }
+          return response;
+        });
       })
     );
     return;
   }
 
-  // Cross-origin (Cloudinary, etc.) — stale-while-revalidate
-  if (url.hostname.includes('cloudinary.com') || url.hostname.includes('supabase.co')) {
+  // --- Static assets (JS, CSS, fonts, workers): cache-first with version ---
+  if (
+    request.destination === 'script' ||
+    request.destination === 'style' ||
+    request.destination === 'font' ||
+    request.destination === 'worker'
+  ) {
     event.respondWith(
       caches.match(request).then((cached) => {
-        const fetchPromise = fetch(request)
-          .then((response) => {
-            if (response && response.status === 200) {
-              const clone = response.clone();
-              caches.open(RUNTIME_CACHE).then((cache) => cache.put(request, clone));
-            }
-            return response;
-          })
-          .catch(() => cached);
-        return cached || fetchPromise;
+        if (cached) return cached;
+        return fetch(request).then((response) => {
+          if (response.ok) {
+            const clone = response.clone();
+            caches.open(STATIC_CACHE).then((cache) => cache.put(request, clone));
+          }
+          return response;
+        });
       })
     );
+    return;
   }
+
+  // --- Default same-origin: network-first ---
+  if (url.origin === location.origin) {
+    event.respondWith(
+      fetch(request)
+        .then((response) => {
+          const clone = response.clone();
+          caches.open(RUNTIME_CACHE).then((cache) => cache.put(request, clone));
+          return response;
+        })
+        .catch(() => caches.match(request))
+    );
+    return;
+  }
+
+  // --- Other cross-origin: stale-while-revalidate ---
+  event.respondWith(
+    caches.match(request).then((cached) => {
+      const fetchPromise = fetch(request)
+        .then((response) => {
+          if (response && response.status === 200) {
+            const clone = response.clone();
+            caches.open(RUNTIME_CACHE).then((cache) => cache.put(request, clone));
+          }
+          return response;
+        })
+        .catch(() => cached);
+      return cached || fetchPromise;
+    })
+  );
 });
