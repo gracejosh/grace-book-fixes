@@ -8,7 +8,7 @@ import type { ChatRoom, Message, Profile } from '@/types';
 import {
   MessageCircle, Send, Plus, Users, Hash, Lock, Search, Smile,
   Image as ImageIcon, Reply, Trash2, Edit2, X, ArrowLeft, Check,
-  AlertCircle, Loader, Mic, Square, BookOpen, Library,
+  AlertCircle, Loader, Mic, Square, BookOpen, Library, UserPlus, UserMinus, Settings,
 } from 'lucide-react';
 import { EmptyState } from '@/components/ui';
 
@@ -47,6 +47,15 @@ export default function Chat() {
   const [isRecording, setIsRecording] = useState(false);
   const [recordSeconds, setRecordSeconds] = useState(0);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [showCreateGroup, setShowCreateGroup] = useState(false);
+  const [groupName, setGroupName] = useState('');
+  const [groupMembers, setGroupMembers] = useState<Profile[]>([]);
+  const [groupUserSearch, setGroupUserSearch] = useState('');
+  const [groupUserResults, setGroupUserResults] = useState<Profile[]>([]);
+  const [showManageMembers, setShowManageMembers] = useState(false);
+  const [memberSearch, setMemberSearch] = useState('');
+  const [memberResults, setMemberResults] = useState<Profile[]>([]);
+  const [roomParticipants, setRoomParticipants] = useState<Profile[]>([]);
 
   const profilesRef = useRef<Record<string, Profile>>({});
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -402,6 +411,112 @@ export default function Chat() {
     setUserResults([]);
     showToast(`Private chat with ${otherUser.username} created!`, 'success');
   };
+
+  // Search users for group creation
+  useEffect(() => {
+    if (!groupUserSearch.trim()) { setGroupUserResults([]); return; }
+    const timeout = setTimeout(async () => {
+      const { data } = await supabase
+        .from('profiles')
+        .select('*')
+        .ilike('username', `%${groupUserSearch.trim()}%`)
+        .limit(10);
+      setGroupUserResults((data as Profile[]) ?? []);
+    }, 300);
+    return () => clearTimeout(timeout);
+  }, [groupUserSearch]);
+
+  const toggleGroupMember = (p: Profile) => {
+    setGroupMembers((prev) =>
+      prev.some((m) => m.id === p.id)
+        ? prev.filter((m) => m.id !== p.id)
+        : [...prev, p]
+    );
+  };
+
+  const createGroupChat = async () => {
+    if (!user || !groupName.trim() || groupMembers.length === 0) return;
+    const participantIds = [user.id, ...groupMembers.map((m) => m.id)];
+    const { data, error } = await supabase.from('chat_rooms').insert({
+      name: groupName.trim(),
+      type: 'private',
+      created_by: user.id,
+      participants: participantIds,
+      is_active: true,
+    }).select().single();
+    if (error) { showToast('Could not create group', 'error'); return; }
+    setRooms((prev) => [...prev, data as ChatRoom]);
+    setSelectedRoom(data as ChatRoom);
+    setGroupName('');
+    setGroupMembers([]);
+    setGroupUserSearch('');
+    setGroupUserResults([]);
+    setShowCreateGroup(false);
+    showToast(`Group "${groupName.trim()}" created!`, 'success');
+  };
+
+  const resetGroupForm = () => {
+    setGroupName('');
+    setGroupMembers([]);
+    setGroupUserSearch('');
+    setGroupUserResults([]);
+    setShowCreateGroup(false);
+  };
+
+  // Load participants for selected room
+  useEffect(() => {
+    if (!selectedRoom?.participants || selectedRoom.type !== 'private') {
+      setRoomParticipants([]);
+      return;
+    }
+    const ids = selectedRoom.participants.filter((id) => id !== user?.id);
+    if (ids.length === 0) { setRoomParticipants([]); return; }
+    supabase.from('profiles').select('*').in('id', ids).then(({ data }) => {
+      setRoomParticipants((data as Profile[]) ?? []);
+    });
+  }, [selectedRoom, user]);
+
+  // Search users for member management
+  useEffect(() => {
+    if (!memberSearch.trim()) { setMemberResults([]); return; }
+    const timeout = setTimeout(async () => {
+      const { data } = await supabase
+        .from('profiles')
+        .select('*')
+        .ilike('username', `%${memberSearch.trim()}%`)
+        .limit(10);
+      setMemberResults((data as Profile[]) ?? []);
+    }, 300);
+    return () => clearTimeout(timeout);
+  }, [memberSearch]);
+
+  const addMember = async (p: Profile) => {
+    if (!selectedRoom || !user || !selectedRoom.participants) return;
+    if (selectedRoom.participants.includes(p.id)) return;
+    const updated = [...selectedRoom.participants, p.id];
+    const { error } = await supabase.from('chat_rooms')
+      .update({ participants: updated }).eq('id', selectedRoom.id);
+    if (error) { showToast('Could not add member', 'error'); return; }
+    setSelectedRoom({ ...selectedRoom, participants: updated });
+    setRoomParticipants((prev) => [...prev, p]);
+    setMemberSearch('');
+    setMemberResults([]);
+    showToast(`${p.username ?? 'User'} added to group`, 'success');
+  };
+
+  const removeMember = async (p: Profile) => {
+    if (!selectedRoom || !user || !selectedRoom.participants) return;
+    if (p.id === user.id) return;
+    const updated = selectedRoom.participants.filter((id) => id !== p.id);
+    const { error } = await supabase.from('chat_rooms')
+      .update({ participants: updated }).eq('id', selectedRoom.id);
+    if (error) { showToast('Could not remove member', 'error'); return; }
+    setSelectedRoom({ ...selectedRoom, participants: updated });
+    setRoomParticipants((prev) => prev.filter((m) => m.id !== p.id));
+    showToast(`${p.username ?? 'User'} removed from group`, 'info');
+  };
+
+  const isRoomAdmin = selectedRoom?.created_by === user?.id;
   const formatTime = (iso: string) => new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
   if (!user) {
@@ -438,6 +553,9 @@ export default function Chat() {
             <button onClick={() => setShowNewRoom(!showNewRoom)} className="p-2 rounded-xl bg-primary-600 text-white hover:scale-105 transition-transform" title="Create new room">
               <Plus className="h-4 w-4" />
             </button>
+            <button onClick={() => setShowCreateGroup(true)} className="p-2 rounded-xl bg-gold-500 text-white hover:scale-105 transition-transform" title="Create group chat">
+              <UserPlus className="h-4 w-4" />
+            </button>
           </div>
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
@@ -462,6 +580,51 @@ export default function Chat() {
           )}
           {searchingUsers && <p className="text-xs text-slate-400 mt-1 px-2">Searching...</p>}
         </div>
+
+        <AnimatePresence>
+          {showCreateGroup && (
+            <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden border-b border-slate-200 dark:border-slate-700">
+              <div className="p-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-semibold">Create Group Chat</span>
+                  <button onClick={resetGroupForm} className="p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800"><X className="h-4 w-4" /></button>
+                </div>
+                <input value={groupName} onChange={(e) => setGroupName(e.target.value)} placeholder="Group name" className="input-field py-2 text-sm" />
+                {groupMembers.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5">
+                    {groupMembers.map((m) => (
+                      <span key={m.id} className="flex items-center gap-1 px-2 py-1 rounded-lg bg-primary-50 dark:bg-primary-900/20 text-xs font-medium">
+                        {m.username ?? 'Unknown'}
+                        <button onClick={() => toggleGroupMember(m)} className="text-slate-400 hover:text-red-500"><X className="h-3 w-3" /></button>
+                      </span>
+                    ))}
+                  </div>
+                )}
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                  <input value={groupUserSearch} onChange={(e) => setGroupUserSearch(e.target.value)} placeholder="Search users to add..." className="input-field pl-10 py-2 text-sm" />
+                </div>
+                {groupUserResults.length > 0 && (
+                  <div className="space-y-1 max-h-40 overflow-y-auto scrollbar-thin">
+                    {groupUserResults
+                      .filter((u) => !groupMembers.some((m) => m.id === u.id) && u.id !== user?.id)
+                      .map((u) => (
+                        <button key={u.id} onClick={() => toggleGroupMember(u)}
+                          className="w-full flex items-center gap-2 p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors text-left">
+                          <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-primary-400 to-gold-400 flex items-center justify-center text-white text-xs font-bold overflow-hidden shrink-0">
+                            {u.avatar_url ? <img src={u.avatar_url} alt="" className="w-full h-full rounded-lg object-cover" /> : u.username?.charAt(0).toUpperCase() ?? '?'}
+                          </div>
+                          <span className="text-sm font-medium truncate">{u.username ?? 'Unknown'}</span>
+                          <Plus className="h-3 w-3 text-primary-500 ml-auto" />
+                        </button>
+                      ))}
+                  </div>
+                )}
+                <button onClick={createGroupChat} disabled={!groupName.trim() || groupMembers.length === 0} className="btn-primary w-full py-2 text-sm disabled:opacity-50">Create Group ({groupMembers.length + 1} members)</button>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         <AnimatePresence>
           {showNewRoom && (
@@ -526,9 +689,70 @@ export default function Chat() {
                   </span>
                   <span className="mx-1">·</span>
                   <Users className="h-3 w-3" /> {selectedRoom.participants?.length || 0} members
+                  {selectedRoom.type === 'private' && isRoomAdmin && (
+                    <>
+                      <span className="mx-1">·</span>
+                      <button onClick={() => setShowManageMembers(!showManageMembers)} className="text-primary-500 hover:text-primary-600 font-medium flex items-center gap-0.5">
+                        <Settings className="h-3 w-3" /> Manage
+                      </button>
+                    </>
+                  )}
                 </p>
               </div>
             </div>
+
+            {/* Member management panel */}
+            <AnimatePresence>
+              {showManageMembers && selectedRoom.type === 'private' && isRoomAdmin && (
+                <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800">
+                  <div className="p-4 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-semibold">Manage Members</span>
+                      <button onClick={() => setShowManageMembers(false)} className="p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700"><X className="h-4 w-4" /></button>
+                    </div>
+                    {/* Current members */}
+                    <div className="space-y-1">
+                      {roomParticipants.map((p) => (
+                        <div key={p.id} className="flex items-center gap-2 p-2 rounded-lg bg-white dark:bg-slate-700">
+                          <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-primary-400 to-gold-400 flex items-center justify-center text-white text-xs font-bold overflow-hidden shrink-0">
+                            {p.avatar_url ? <img src={p.avatar_url} alt="" className="w-full h-full rounded-lg object-cover" /> : p.username?.charAt(0).toUpperCase() ?? '?'}
+                          </div>
+                          <span className="text-sm font-medium flex-1 truncate">{p.username ?? 'Unknown'}</span>
+                          <button onClick={() => removeMember(p)} className="p-1 rounded-lg text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20" title="Remove member">
+                            <UserMinus className="h-4 w-4" />
+                          </button>
+                        </div>
+                      ))}
+                      <div className="flex items-center gap-2 p-2 rounded-lg bg-white dark:bg-slate-700">
+                        <div className="w-7 h-7 rounded-lg bg-primary-500 flex items-center justify-center text-white text-xs font-bold shrink-0">{profile?.username?.charAt(0).toUpperCase() ?? 'Y'}</div>
+                        <span className="text-sm font-medium flex-1 truncate">{profile?.username ?? 'You'} (Admin)</span>
+                      </div>
+                    </div>
+                    {/* Add members */}
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                      <input value={memberSearch} onChange={(e) => setMemberSearch(e.target.value)} placeholder="Search users to add..." className="input-field pl-10 py-2 text-sm" />
+                    </div>
+                    {memberResults.length > 0 && (
+                      <div className="space-y-1 max-h-32 overflow-y-auto scrollbar-thin">
+                        {memberResults
+                          .filter((u) => !selectedRoom.participants?.includes(u.id))
+                          .map((u) => (
+                            <button key={u.id} onClick={() => addMember(u)}
+                              className="w-full flex items-center gap-2 p-2 rounded-lg bg-white dark:bg-slate-700 hover:bg-slate-100 dark:hover:bg-slate-600 transition-colors text-left">
+                              <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-primary-400 to-gold-400 flex items-center justify-center text-white text-xs font-bold overflow-hidden shrink-0">
+                                {u.avatar_url ? <img src={u.avatar_url} alt="" className="w-full h-full rounded-lg object-cover" /> : u.username?.charAt(0).toUpperCase() ?? '?'}
+                              </div>
+                              <span className="text-sm font-medium truncate">{u.username ?? 'Unknown'}</span>
+                              <UserPlus className="h-4 w-4 text-primary-500 ml-auto" />
+                            </button>
+                          ))}
+                      </div>
+                    )}
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
 
             {/* Daily limit banner */}
             <div className={`px-4 py-2 text-center text-xs font-medium transition-all ${messagesLeft <= 5 ? 'bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400' : 'bg-slate-100 dark:bg-slate-800 text-slate-500'}`}>
