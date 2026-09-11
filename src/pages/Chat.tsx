@@ -9,12 +9,15 @@ import {
   MessageCircle, Send, Plus, Users, Hash, Lock, Search, Smile,
   Image as ImageIcon, Reply, Trash2, Edit2, X, ArrowLeft, Check,
   AlertCircle, Loader, Mic, Square, BookOpen, Library, UserPlus, UserMinus, Settings,
+  ArrowLeft as BackIcon, Circle, User as UserIcon,
 } from 'lucide-react';
 import { EmptyState } from '@/components/ui';
 
 const EMOJIS = ['😀', '😂', '❤️', '🙏', '🙌', '✨', '🔥', '👏', '😍', '🥰', '😇', '🕊️', '✝️', '📖', '⛪', '🎵', '💪', '🌟', '💙', '🙌'];
 const MAX_FILE_SIZE = 5 * 1024 * 1024;
 const DAILY_MESSAGE_LIMIT = 50;
+
+type SidebarTab = 'rooms' | 'users';
 
 export default function Chat() {
   const { user, profile } = useAuth();
@@ -57,6 +60,13 @@ export default function Chat() {
   const [memberResults, setMemberResults] = useState<Profile[]>([]);
   const [roomParticipants, setRoomParticipants] = useState<Profile[]>([]);
 
+  // New state for user list and profile panel
+  const [sidebarTab, setSidebarTab] = useState<SidebarTab>('rooms');
+  const [allUsers, setAllUsers] = useState<Profile[]>([]);
+  const [loadingUsers, setLoadingUsers] = useState(false);
+  const [selectedUserProfile, setSelectedUserProfile] = useState<Profile | null>(null);
+  const [globalOnlineIds, setGlobalOnlineIds] = useState<string[]>([]);
+
   const profilesRef = useRef<Record<string, Profile>>({});
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -85,6 +95,56 @@ export default function Chat() {
       finally { setLoading(false); }
     };
     fetchRooms();
+  }, [user]);
+
+  // Fetch all users for the user list tab
+  const fetchAllUsers = useCallback(async () => {
+    if (!user) return;
+    setLoadingUsers(true);
+    const { data } = await supabase
+      .from('profiles')
+      .select('*')
+      .neq('id', user.id)
+      .order('username', { ascending: true });
+    setAllUsers((data as Profile[]) ?? []);
+    setLoadingUsers(false);
+  }, [user]);
+
+  useEffect(() => {
+    if (sidebarTab === 'users' && user) {
+      fetchAllUsers();
+    }
+  }, [sidebarTab, user, fetchAllUsers]);
+
+  // Global presence channel for user list online status
+  useEffect(() => {
+    if (!user) return;
+    const presenceChannel = supabase.channel('global-presence');
+
+    presenceChannel
+      .on('broadcast', { event: 'presence' }, (payload) => {
+        const userId = payload.payload?.user_id as string;
+        const isOnline = payload.payload?.online as boolean;
+        if (userId) {
+          setGlobalOnlineIds((prev) =>
+            isOnline ? (prev.includes(userId) ? prev : [...prev, userId]) : prev.filter((id) => id !== userId)
+          );
+        }
+      })
+      .subscribe();
+
+    presenceChannel.send({ type: 'broadcast', event: 'presence', payload: { user_id: user.id, online: true } });
+
+    const handleUnload = () => {
+      presenceChannel.send({ type: 'broadcast', event: 'presence', payload: { user_id: user.id, online: false } });
+    };
+    window.addEventListener('beforeunload', handleUnload);
+
+    return () => {
+      presenceChannel.send({ type: 'broadcast', event: 'presence', payload: { user_id: user.id, online: false } });
+      supabase.removeChannel(presenceChannel);
+      window.removeEventListener('beforeunload', handleUnload);
+    };
   }, [user]);
 
   const loadProfiles = useCallback(async (ids: string[]) => {
@@ -376,7 +436,9 @@ export default function Chat() {
     setSelectedRoom(room);
   };
 
-  const filteredRooms = rooms.filter((r) => r.name?.toLowerCase().includes(search.toLowerCase()) ?? false);
+  // Hide orphaned rooms (participants < 2) — only show rooms with 2+ participants
+  const visibleRooms = rooms.filter((r) => (r.participants?.length ?? 0) >= 2);
+  const filteredRooms = visibleRooms.filter((r) => r.name?.toLowerCase().includes(search.toLowerCase()) ?? false);
 
   // Search users by username from profiles table
   useEffect(() => {
@@ -394,9 +456,35 @@ export default function Chat() {
     return () => clearTimeout(timeout);
   }, [userSearch]);
 
-  const startPrivateChat = async (otherUser: Profile) => {
+  // Find or create a 1-to-1 room with exactly 2 participants
+  const startDirectChat = async (otherUser: Profile) => {
     if (!user) return;
-    const roomName = `${profile?.username ?? 'Me'} & ${otherUser.username}`;
+
+    // Check if a 1-to-1 room already exists with exactly these two participants
+    const { data: existingRooms } = await supabase
+      .from('chat_rooms')
+      .select('*')
+      .eq('type', 'private')
+      .eq('is_active', true)
+      .contains('participants', [user.id, otherUser.id]);
+
+    const existingDirect = (existingRooms as ChatRoom[])?.find(
+      (r) =>
+        r.participants?.length === 2 &&
+        r.participants.includes(user.id) &&
+        r.participants.includes(otherUser.id)
+    );
+
+    if (existingDirect) {
+      setSelectedRoom(existingDirect);
+      setSelectedUserProfile(null);
+      setSidebarTab('rooms');
+      showToast(`Chat with ${otherUser.username ?? 'user'} opened!`, 'success');
+      return;
+    }
+
+    // Create new 1-to-1 room
+    const roomName = `${profile?.username ?? 'Me'} & ${otherUser.username ?? 'User'}`;
     const { data, error } = await supabase.from('chat_rooms').insert({
       name: roomName,
       type: 'private',
@@ -404,12 +492,18 @@ export default function Chat() {
       participants: [user.id, otherUser.id],
       is_active: true,
     }).select().single();
-    if (error) { showToast('Could not create private chat', 'error'); return; }
+    if (error) { showToast('Could not create chat', 'error'); return; }
     setRooms((prev) => [...prev, data as ChatRoom]);
     setSelectedRoom(data as ChatRoom);
+    setSelectedUserProfile(null);
+    setSidebarTab('rooms');
+    showToast(`Private chat with ${otherUser.username ?? 'user'} started!`, 'success');
+  };
+
+  const startPrivateChat = async (otherUser: Profile) => {
+    await startDirectChat(otherUser);
     setUserSearch('');
     setUserResults([]);
-    showToast(`Private chat with ${otherUser.username} created!`, 'success');
   };
 
   // Search users for group creation
@@ -519,6 +613,10 @@ export default function Chat() {
   const isRoomAdmin = selectedRoom?.created_by === user?.id;
   const formatTime = (iso: string) => new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
+  const handleUserClick = (p: Profile) => {
+    setSelectedUserProfile(p);
+  };
+
   if (!user) {
     return (
       <div className="min-h-[70vh] flex items-center justify-center px-4">
@@ -545,127 +643,240 @@ export default function Chat() {
     <div className="min-h-[calc(100vh-4rem)] flex">
       {/* Sidebar */}
       <div className={`w-80 border-r border-slate-200 dark:border-slate-700 flex flex-col bg-white dark:bg-slate-900 ${showMobileChat ? 'hidden md:flex' : 'flex'}`}>
-        <div className="p-4 border-b border-slate-200 dark:border-slate-700">
-          <div className="flex items-center justify-between mb-3">
-            <h1 className="text-xl font-bold flex items-center gap-2">
-              <MessageCircle className="h-5 w-5 text-primary-600" /> Chat
-            </h1>
-            <button onClick={() => setShowNewRoom(!showNewRoom)} className="p-2 rounded-xl bg-primary-600 text-white hover:scale-105 transition-transform" title="Create new room">
-              <Plus className="h-4 w-4" />
-            </button>
-            <button onClick={() => setShowCreateGroup(true)} className="p-2 rounded-xl bg-gold-500 text-white hover:scale-105 transition-transform" title="Create group chat">
-              <UserPlus className="h-4 w-4" />
-            </button>
-          </div>
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-            <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search rooms..." className="input-field pl-10 py-2 text-sm" />
-          </div>
-          <div className="relative mt-2">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-            <input value={userSearch} onChange={(e) => setUserSearch(e.target.value)} placeholder="Search users to chat..." className="input-field pl-10 py-2 text-sm" />
-          </div>
-          {userResults.length > 0 && (
-            <div className="mt-2 space-y-1 max-h-48 overflow-y-auto scrollbar-thin">
-              {userResults.map((u) => (
-                <button key={u.id} onClick={() => startPrivateChat(u)}
-                  className="w-full flex items-center gap-2 p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors text-left">
-                  <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-primary-400 to-gold-400 flex items-center justify-center text-white text-xs font-bold overflow-hidden shrink-0">
-                    {u.avatar_url ? <img src={u.avatar_url} alt="" className="w-full h-full rounded-lg object-cover" /> : u.username?.charAt(0).toUpperCase() ?? '?'}
-                  </div>
-                  <span className="text-sm font-medium truncate">{u.username ?? 'Unknown'}</span>
+        {/* Tab switcher */}
+        <div className="flex border-b border-slate-200 dark:border-slate-700">
+          <button
+            onClick={() => setSidebarTab('rooms')}
+            className={`flex-1 py-3 text-sm font-semibold flex items-center justify-center gap-2 transition-colors ${sidebarTab === 'rooms' ? 'text-primary-600 border-b-2 border-primary-600' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
+          >
+            <Hash className="h-4 w-4" /> Rooms
+          </button>
+          <button
+            onClick={() => setSidebarTab('users')}
+            className={`flex-1 py-3 text-sm font-semibold flex items-center justify-center gap-2 transition-colors ${sidebarTab === 'users' ? 'text-primary-600 border-b-2 border-primary-600' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
+          >
+            <Users className="h-4 w-4" /> Users
+          </button>
+        </div>
+
+        {/* User profile panel overlay */}
+        <AnimatePresence>
+          {selectedUserProfile && (
+            <motion.div
+              initial={{ x: '-100%' }}
+              animate={{ x: 0 }}
+              exit={{ x: '-100%' }}
+              transition={{ type: 'tween', duration: 0.2 }}
+              className="absolute inset-0 z-20 bg-white dark:bg-slate-900 flex flex-col"
+            >
+              <div className="p-4 border-b border-slate-200 dark:border-slate-700 flex items-center gap-3">
+                <button onClick={() => setSelectedUserProfile(null)} className="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800">
+                  <ArrowLeft className="h-5 w-5" />
                 </button>
-              ))}
-            </div>
-          )}
-          {searchingUsers && <p className="text-xs text-slate-400 mt-1 px-2">Searching...</p>}
-        </div>
-
-        <AnimatePresence>
-          {showCreateGroup && (
-            <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden border-b border-slate-200 dark:border-slate-700">
-              <div className="p-4 space-y-3">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-semibold">Create Group Chat</span>
-                  <button onClick={resetGroupForm} className="p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800"><X className="h-4 w-4" /></button>
+                <span className="text-sm font-semibold">User Profile</span>
+              </div>
+              <div className="flex-1 flex flex-col items-center p-6 overflow-y-auto scrollbar-thin">
+                <div className="w-24 h-24 rounded-2xl bg-gradient-to-br from-primary-400 to-gold-400 flex items-center justify-center text-white text-3xl font-bold overflow-hidden mb-4">
+                  {selectedUserProfile.avatar_url ? (
+                    <img src={selectedUserProfile.avatar_url} alt="" className="w-full h-full rounded-2xl object-cover" />
+                  ) : (
+                    selectedUserProfile.username?.charAt(0).toUpperCase() ?? '?'
+                  )}
                 </div>
-                <input value={groupName} onChange={(e) => setGroupName(e.target.value)} placeholder="Group name" className="input-field py-2 text-sm" />
-                {groupMembers.length > 0 && (
-                  <div className="flex flex-wrap gap-1.5">
-                    {groupMembers.map((m) => (
-                      <span key={m.id} className="flex items-center gap-1 px-2 py-1 rounded-lg bg-primary-50 dark:bg-primary-900/20 text-xs font-medium">
-                        {m.username ?? 'Unknown'}
-                        <button onClick={() => toggleGroupMember(m)} className="text-slate-400 hover:text-red-500"><X className="h-3 w-3" /></button>
-                      </span>
-                    ))}
-                  </div>
-                )}
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-                  <input value={groupUserSearch} onChange={(e) => setGroupUserSearch(e.target.value)} placeholder="Search users to add..." className="input-field pl-10 py-2 text-sm" />
+                <h2 className="text-xl font-bold mb-1">{selectedUserProfile.username ?? 'Unknown'}</h2>
+                <div className="flex items-center gap-1.5 mb-4">
+                  <span className={`w-2.5 h-2.5 rounded-full ${globalOnlineIds.includes(selectedUserProfile.id) ? 'bg-emerald-500' : 'bg-slate-400'}`} />
+                  <span className="text-xs font-medium text-slate-500">
+                    {globalOnlineIds.includes(selectedUserProfile.id) ? 'Online' : 'Offline'}
+                  </span>
                 </div>
-                {groupUserResults.length > 0 && (
-                  <div className="space-y-1 max-h-40 overflow-y-auto scrollbar-thin">
-                    {groupUserResults
-                      .filter((u) => !groupMembers.some((m) => m.id === u.id) && u.id !== user?.id)
-                      .map((u) => (
-                        <button key={u.id} onClick={() => toggleGroupMember(u)}
-                          className="w-full flex items-center gap-2 p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors text-left">
-                          <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-primary-400 to-gold-400 flex items-center justify-center text-white text-xs font-bold overflow-hidden shrink-0">
-                            {u.avatar_url ? <img src={u.avatar_url} alt="" className="w-full h-full rounded-lg object-cover" /> : u.username?.charAt(0).toUpperCase() ?? '?'}
-                          </div>
-                          <span className="text-sm font-medium truncate">{u.username ?? 'Unknown'}</span>
-                          <Plus className="h-3 w-3 text-primary-500 ml-auto" />
-                        </button>
-                      ))}
-                  </div>
+                {selectedUserProfile.bio ? (
+                  <p className="text-sm text-slate-600 dark:text-slate-400 text-center mb-6 max-w-xs">{selectedUserProfile.bio}</p>
+                ) : (
+                  <p className="text-sm text-slate-400 text-center mb-6 max-w-xs italic">No bio yet</p>
                 )}
-                <button onClick={createGroupChat} disabled={!groupName.trim() || groupMembers.length === 0} className="btn-primary w-full py-2 text-sm disabled:opacity-50">Create Group ({groupMembers.length + 1} members)</button>
+                <button
+                  onClick={() => startDirectChat(selectedUserProfile)}
+                  className="btn-primary w-full py-3 text-sm flex items-center justify-center gap-2"
+                >
+                  <Send className="h-4 w-4" /> Send Message
+                </button>
               </div>
             </motion.div>
           )}
         </AnimatePresence>
 
-        <AnimatePresence>
-          {showNewRoom && (
-            <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden border-b border-slate-200 dark:border-slate-700">
-              <div className="p-4 space-y-3">
-                <input value={roomName} onChange={(e) => setRoomName(e.target.value)} placeholder="Room name" className="input-field py-2 text-sm" />
-                <div className="flex gap-2">
-                  <button onClick={() => setRoomType('public')} className={`flex-1 py-2 rounded-lg text-sm font-medium ${roomType === 'public' ? 'bg-primary-600 text-white' : 'glass'}`}>Public</button>
-                  <button onClick={() => setRoomType('private')} className={`flex-1 py-2 rounded-lg text-sm font-medium ${roomType === 'private' ? 'bg-primary-600 text-white' : 'glass'}`}>Private</button>
-                </div>
-                <button onClick={createRoom} className="btn-primary w-full py-2 text-sm">Create Room</button>
+        {sidebarTab === 'rooms' && (
+          <>
+            <div className="p-4 border-b border-slate-200 dark:border-slate-700">
+              <div className="flex items-center justify-between mb-3">
+                <h1 className="text-xl font-bold flex items-center gap-2">
+                  <MessageCircle className="h-5 w-5 text-primary-600" /> Chat
+                </h1>
+                <button onClick={() => setShowNewRoom(!showNewRoom)} className="p-2 rounded-xl bg-primary-600 text-white hover:scale-105 transition-transform" title="Create new room">
+                  <Plus className="h-4 w-4" />
+                </button>
+                <button onClick={() => setShowCreateGroup(true)} className="p-2 rounded-xl bg-gold-500 text-white hover:scale-105 transition-transform" title="Create group chat">
+                  <UserPlus className="h-4 w-4" />
+                </button>
               </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-
-        <div className="flex-1 overflow-y-auto scrollbar-thin">
-          {loading ? (
-            <div className="p-4 space-y-2">{Array.from({ length: 4 }).map((_, i) => <div key={i} className="skeleton h-16 rounded-xl" />)}</div>
-          ) : filteredRooms.length === 0 ? (
-            <div className="text-center py-8 px-4">
-              <MessageCircle className="h-12 w-12 text-slate-300 mx-auto mb-3" />
-              <p className="text-slate-500 text-sm">{rooms.length === 0 ? 'No chat rooms yet. Create one!' : 'No rooms found'}</p>
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search rooms..." className="input-field pl-10 py-2 text-sm" />
+              </div>
+              <div className="relative mt-2">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                <input value={userSearch} onChange={(e) => setUserSearch(e.target.value)} placeholder="Search users to chat..." className="input-field pl-10 py-2 text-sm" />
+              </div>
+              {userResults.length > 0 && (
+                <div className="mt-2 space-y-1 max-h-48 overflow-y-auto scrollbar-thin">
+                  {userResults.map((u) => (
+                    <button key={u.id} onClick={() => startPrivateChat(u)}
+                      className="w-full flex items-center gap-2 p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors text-left">
+                      <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-primary-400 to-gold-400 flex items-center justify-center text-white text-xs font-bold overflow-hidden shrink-0">
+                        {u.avatar_url ? <img src={u.avatar_url} alt="" className="w-full h-full rounded-lg object-cover" /> : u.username?.charAt(0).toUpperCase() ?? '?'}
+                      </div>
+                      <span className="text-sm font-medium truncate">{u.username ?? 'Unknown'}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+              {searchingUsers && <p className="text-xs text-slate-400 mt-1 px-2">Searching...</p>}
             </div>
-          ) : (
-            filteredRooms.map((room) => (
-              <button key={room.id} onClick={() => joinRoom(room)}
-                className={`w-full flex items-center gap-3 p-3 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors text-left ${selectedRoom?.id === room.id ? 'bg-primary-50 dark:bg-primary-900/20' : ''}`}>
-                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary-500 to-gold-500 flex items-center justify-center shrink-0">
-                  {room.type === 'private' ? <Lock className="h-5 w-5 text-white" /> : <Hash className="h-5 w-5 text-white" />}
+
+            <AnimatePresence>
+              {showCreateGroup && (
+                <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden border-b border-slate-200 dark:border-slate-700">
+                  <div className="p-4 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-semibold">Create Group Chat</span>
+                      <button onClick={resetGroupForm} className="p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800"><X className="h-4 w-4" /></button>
+                    </div>
+                    <input value={groupName} onChange={(e) => setGroupName(e.target.value)} placeholder="Group name" className="input-field py-2 text-sm" />
+                    {groupMembers.length > 0 && (
+                      <div className="flex flex-wrap gap-1.5">
+                        {groupMembers.map((m) => (
+                          <span key={m.id} className="flex items-center gap-1 px-2 py-1 rounded-lg bg-primary-50 dark:bg-primary-900/20 text-xs font-medium">
+                            {m.username ?? 'Unknown'}
+                            <button onClick={() => toggleGroupMember(m)} className="text-slate-400 hover:text-red-500"><X className="h-3 w-3" /></button>
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                      <input value={groupUserSearch} onChange={(e) => setGroupUserSearch(e.target.value)} placeholder="Search users to add..." className="input-field pl-10 py-2 text-sm" />
+                    </div>
+                    {groupUserResults.length > 0 && (
+                      <div className="space-y-1 max-h-40 overflow-y-auto scrollbar-thin">
+                        {groupUserResults
+                          .filter((u) => !groupMembers.some((m) => m.id === u.id) && u.id !== user?.id)
+                          .map((u) => (
+                            <button key={u.id} onClick={() => toggleGroupMember(u)}
+                              className="w-full flex items-center gap-2 p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors text-left">
+                              <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-primary-400 to-gold-400 flex items-center justify-center text-white text-xs font-bold overflow-hidden shrink-0">
+                                {u.avatar_url ? <img src={u.avatar_url} alt="" className="w-full h-full rounded-lg object-cover" /> : u.username?.charAt(0).toUpperCase() ?? '?'}
+                              </div>
+                              <span className="text-sm font-medium truncate">{u.username ?? 'Unknown'}</span>
+                              <Plus className="h-3 w-3 text-primary-500 ml-auto" />
+                            </button>
+                          ))}
+                      </div>
+                    )}
+                    <button onClick={createGroupChat} disabled={!groupName.trim() || groupMembers.length === 0} className="btn-primary w-full py-2 text-sm disabled:opacity-50">Create Group ({groupMembers.length + 1} members)</button>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            <AnimatePresence>
+              {showNewRoom && (
+                <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden border-b border-slate-200 dark:border-slate-700">
+                  <div className="p-4 space-y-3">
+                    <input value={roomName} onChange={(e) => setRoomName(e.target.value)} placeholder="Room name" className="input-field py-2 text-sm" />
+                    <div className="flex gap-2">
+                      <button onClick={() => setRoomType('public')} className={`flex-1 py-2 rounded-lg text-sm font-medium ${roomType === 'public' ? 'bg-primary-600 text-white' : 'glass'}`}>Public</button>
+                      <button onClick={() => setRoomType('private')} className={`flex-1 py-2 rounded-lg text-sm font-medium ${roomType === 'private' ? 'bg-primary-600 text-white' : 'glass'}`}>Private</button>
+                    </div>
+                    <button onClick={createRoom} className="btn-primary w-full py-2 text-sm">Create Room</button>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            <div className="flex-1 overflow-y-auto scrollbar-thin">
+              {loading ? (
+                <div className="p-4 space-y-2">{Array.from({ length: 4 }).map((_, i) => <div key={i} className="skeleton h-16 rounded-xl" />)}</div>
+              ) : filteredRooms.length === 0 ? (
+                <div className="text-center py-8 px-4">
+                  <MessageCircle className="h-12 w-12 text-slate-300 mx-auto mb-3" />
+                  <p className="text-slate-500 text-sm">{visibleRooms.length === 0 ? 'No chat rooms yet. Create one!' : 'No rooms found'}</p>
                 </div>
-                <div className="flex-1 min-w-0">
-                  <p className="font-semibold text-sm truncate">{room.name}</p>
-                  <p className="text-xs text-slate-500 flex items-center gap-1">
-                    <Users className="h-3 w-3" /> {room.participants?.length || 0} members
-                  </p>
+              ) : (
+                filteredRooms.map((room) => (
+                  <button key={room.id} onClick={() => joinRoom(room)}
+                    className={`w-full flex items-center gap-3 p-3 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors text-left ${selectedRoom?.id === room.id ? 'bg-primary-50 dark:bg-primary-900/20' : ''}`}>
+                    <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary-500 to-gold-500 flex items-center justify-center shrink-0">
+                      {room.type === 'private' ? <Lock className="h-5 w-5 text-white" /> : <Hash className="h-5 w-5 text-white" />}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-semibold text-sm truncate">{room.name}</p>
+                      <p className="text-xs text-slate-500 flex items-center gap-1">
+                        <Users className="h-3 w-3" /> {room.participants?.length || 0} members
+                      </p>
+                    </div>
+                  </button>
+                ))
+              )}
+            </div>
+          </>
+        )}
+
+        {sidebarTab === 'users' && (
+          <div className="flex-1 flex flex-col">
+            <div className="p-4 border-b border-slate-200 dark:border-slate-700">
+              <h1 className="text-xl font-bold flex items-center gap-2 mb-1">
+                <Users className="h-5 w-5 text-primary-600" /> All Users
+              </h1>
+              <p className="text-xs text-slate-500">Tap a user to view their profile and send a message</p>
+            </div>
+            <div className="flex-1 overflow-y-auto scrollbar-thin">
+              {loadingUsers ? (
+                <div className="p-4 space-y-2">{Array.from({ length: 6 }).map((_, i) => <div key={i} className="skeleton h-14 rounded-xl" />)}</div>
+              ) : allUsers.length === 0 ? (
+                <div className="text-center py-8 px-4">
+                  <UserIcon className="h-12 w-12 text-slate-300 mx-auto mb-3" />
+                  <p className="text-slate-500 text-sm">No other users yet</p>
                 </div>
-              </button>
-            ))
-          )}
-        </div>
+              ) : (
+                allUsers.map((u) => {
+                  const isOnline = globalOnlineIds.includes(u.id);
+                  return (
+                    <button
+                      key={u.id}
+                      onClick={() => handleUserClick(u)}
+                      className="w-full flex items-center gap-3 p-3 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors text-left"
+                    >
+                      <div className="relative shrink-0">
+                        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary-400 to-gold-400 flex items-center justify-center text-white text-sm font-bold overflow-hidden">
+                          {u.avatar_url ? <img src={u.avatar_url} alt="" className="w-full h-full rounded-xl object-cover" /> : u.username?.charAt(0).toUpperCase() ?? '?'}
+                        </div>
+                        <span className={`absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full border-2 border-white dark:border-slate-900 ${isOnline ? 'bg-emerald-500' : 'bg-slate-400'}`} />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-semibold text-sm truncate">{u.username ?? 'Unknown'}</p>
+                        <p className="text-xs text-slate-500 flex items-center gap-1">
+                          <Circle className={`h-2 w-2 ${isOnline ? 'text-emerald-500 fill-emerald-500' : 'text-slate-400 fill-slate-400'}`} />
+                          {isOnline ? 'Online' : 'Offline'}
+                        </p>
+                      </div>
+                    </button>
+                  );
+                })
+              )}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Chat area */}
@@ -689,7 +900,7 @@ export default function Chat() {
                   </span>
                   <span className="mx-1">·</span>
                   <Users className="h-3 w-3" /> {selectedRoom.participants?.length || 0} members
-                  {selectedRoom.type === 'private' && isRoomAdmin && (
+                  {selectedRoom.type === 'private' && isRoomAdmin && selectedRoom.participants.length > 2 && (
                     <>
                       <span className="mx-1">·</span>
                       <button onClick={() => setShowManageMembers(!showManageMembers)} className="text-primary-500 hover:text-primary-600 font-medium flex items-center gap-0.5">
@@ -703,7 +914,7 @@ export default function Chat() {
 
             {/* Member management panel */}
             <AnimatePresence>
-              {showManageMembers && selectedRoom.type === 'private' && isRoomAdmin && (
+              {showManageMembers && selectedRoom.type === 'private' && isRoomAdmin && selectedRoom.participants.length > 2 && (
                 <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800">
                   <div className="p-4 space-y-3">
                     <div className="flex items-center justify-between">
