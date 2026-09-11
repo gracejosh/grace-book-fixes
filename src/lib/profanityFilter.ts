@@ -7,7 +7,6 @@ const filter = new Filter({
   languages: ['english'],
   detectLeetspeak: true,
   normalizeUnicode: true,
-  autoReplace: true,
   replaceWith: REPLACE_WITH,
 });
 
@@ -23,7 +22,7 @@ export function filterText(text: string): ProfanityResult {
 
   const badWordCount = result.profaneWords.length;
   return {
-    cleaned: result.processedText,
+    cleaned: result.processedText ?? text,
     hasProfanity: result.containsProfanity,
     blocked: badWordCount >= MAX_BAD_WORDS,
     badWordCount,
