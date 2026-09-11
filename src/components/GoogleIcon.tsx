@@ -1,6 +1,6 @@
 export default function GoogleIcon() {
   return (
-    <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+    <svg viewBox="0 0 24 24" width="24" height="24" xmlns="http://www.w3.org/2000/svg">
       <path
         fill="#4285F4"
         d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.2 2.53-2.5 3.31v2.77h3.86c2.26-2.09 3.28-5.16 3.28-8.09z"
