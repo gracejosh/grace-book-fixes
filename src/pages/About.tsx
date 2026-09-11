@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { supabase } from '@/lib/supabase';
 import { useToast } from '@/context/ToastContext';
-import { Sparkles, Heart, Mail, HelpCircle, ChevronDown, Send, HandHeart, Users, Target, Eye, Facebook, Twitter, Youtube, BookOpen, Code } from 'lucide-react';
+import { Sparkles, Heart, Mail, HelpCircle, ChevronDown, Send, HandHeart, Users, Target, Eye, Share2, Globe, Video, BookOpen, Code } from 'lucide-react';
 
 const tabs = [
   { id: 'about', label: 'About Us', icon: Sparkles },
@@ -160,7 +160,7 @@ function AboutTab() {
       <div className="mt-12 text-center">
         <h3 className="font-bold mb-4">Follow Us</h3>
         <div className="flex items-center justify-center gap-3">
-          {[Facebook, Twitter, Youtube, Mail].map((Icon, i) => (
+          {[Share2, Globe, Video, Mail].map((Icon, i) => (
             <a key={i} href="#" className="w-11 h-11 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-gradient-to-br hover:from-primary-600 hover:to-gold-500 flex items-center justify-center transition-all duration-300 hover:scale-110 hover:text-white">
               <Icon className="h-5 w-5" />
             </a>
