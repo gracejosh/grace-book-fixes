@@ -1,3 +1,6 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
 :root {
   --color-primary-50: #eef6ff;
   --color-primary-100: #d9eaff;
