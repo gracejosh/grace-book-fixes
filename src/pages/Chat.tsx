@@ -34,6 +34,9 @@ export default function Chat() {
   const [editText, setEditText] = useState('');
   const [showEmoji, setShowEmoji] = useState(false);
   const [search, setSearch] = useState('');
+  const [userSearch, setUserSearch] = useState('');
+  const [userResults, setUserResults] = useState<Profile[]>([]);
+  const [searchingUsers, setSearchingUsers] = useState(false);
   const [profiles, setProfiles] = useState<Record<string, Profile>>({});
   const [showMobileChat, setShowMobileChat] = useState(false);
   const [sendingMessage, setSendingMessage] = useState(false);
@@ -57,6 +60,7 @@ export default function Chat() {
 
   useEffect(() => {
     const fetchRooms = async () => {
+      if (!user) { setLoading(false); return; }
       setLoading(true);
       setError(null);
       try {
@@ -64,6 +68,7 @@ export default function Chat() {
           .from('chat_rooms')
           .select('*')
           .eq('is_active', true)
+          .or(`type.eq.public,participants.cs.{${user.id}}`)
           .order('created_at', { ascending: true });
         if (error) { setError(error.message); setLoading(false); return; }
         setRooms((data as ChatRoom[]) ?? []);
@@ -71,7 +76,7 @@ export default function Chat() {
       finally { setLoading(false); }
     };
     fetchRooms();
-  }, []);
+  }, [user]);
 
   const loadProfiles = useCallback(async (ids: string[]) => {
     const uniqueIds = [...new Set(ids)].filter((id) => id && !profilesRef.current[id]);
@@ -363,6 +368,40 @@ export default function Chat() {
   };
 
   const filteredRooms = rooms.filter((r) => r.name?.toLowerCase().includes(search.toLowerCase()) ?? false);
+
+  // Search users by username from profiles table
+  useEffect(() => {
+    if (!userSearch.trim()) { setUserResults([]); return; }
+    setSearchingUsers(true);
+    const timeout = setTimeout(async () => {
+      const { data } = await supabase
+        .from('profiles')
+        .select('*')
+        .ilike('username', `%${userSearch.trim()}%`)
+        .limit(10);
+      setUserResults((data as Profile[]) ?? []);
+      setSearchingUsers(false);
+    }, 300);
+    return () => clearTimeout(timeout);
+  }, [userSearch]);
+
+  const startPrivateChat = async (otherUser: Profile) => {
+    if (!user) return;
+    const roomName = `${profile?.username ?? 'Me'} & ${otherUser.username}`;
+    const { data, error } = await supabase.from('chat_rooms').insert({
+      name: roomName,
+      type: 'private',
+      created_by: user.id,
+      participants: [user.id, otherUser.id],
+      is_active: true,
+    }).select().single();
+    if (error) { showToast('Could not create private chat', 'error'); return; }
+    setRooms((prev) => [...prev, data as ChatRoom]);
+    setSelectedRoom(data as ChatRoom);
+    setUserSearch('');
+    setUserResults([]);
+    showToast(`Private chat with ${otherUser.username} created!`, 'success');
+  };
   const formatTime = (iso: string) => new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
   if (!user) {
@@ -404,6 +443,24 @@ export default function Chat() {
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
             <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search rooms..." className="input-field pl-10 py-2 text-sm" />
           </div>
+          <div className="relative mt-2">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+            <input value={userSearch} onChange={(e) => setUserSearch(e.target.value)} placeholder="Search users to chat..." className="input-field pl-10 py-2 text-sm" />
+          </div>
+          {userResults.length > 0 && (
+            <div className="mt-2 space-y-1 max-h-48 overflow-y-auto scrollbar-thin">
+              {userResults.map((u) => (
+                <button key={u.id} onClick={() => startPrivateChat(u)}
+                  className="w-full flex items-center gap-2 p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors text-left">
+                  <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-primary-400 to-gold-400 flex items-center justify-center text-white text-xs font-bold overflow-hidden shrink-0">
+                    {u.avatar_url ? <img src={u.avatar_url} alt="" className="w-full h-full rounded-lg object-cover" /> : u.username?.charAt(0).toUpperCase() ?? '?'}
+                  </div>
+                  <span className="text-sm font-medium truncate">{u.username ?? 'Unknown'}</span>
+                </button>
+              ))}
+            </div>
+          )}
+          {searchingUsers && <p className="text-xs text-slate-400 mt-1 px-2">Searching...</p>}
         </div>
 
         <AnimatePresence>
