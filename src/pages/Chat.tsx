@@ -38,6 +38,7 @@ export default function Chat() {
   const [userSearch, setUserSearch] = useState('');
   const [loadingUsers, setLoadingUsers] = useState(false);
   const [usersError, setUsersError] = useState<string | null>(null);
+  const [selectedUser, setSelectedUser] = useState<Profile | null>(null);
   const [showMobileChat, setShowMobileChat] = useState(false);
   const [sendingMessage, setSendingMessage] = useState(false);
   const [typingUsers, setTypingUsers] = useState<string[]>([]);
@@ -382,7 +383,8 @@ export default function Chat() {
   };
 
   const filteredRooms = rooms.filter((r) => r.name?.toLowerCase().includes(search.toLowerCase()) ?? false);
-  const filteredUsers = users.filter((person) => (person.username || '').toLowerCase().includes(userSearch.toLowerCase()));
+  const normalizedUserSearch = userSearch.trim().toLowerCase();
+  const filteredUsers = users.filter((person) => (person.username || '').toLowerCase().includes(normalizedUserSearch));
   const formatTime = (iso: string) => new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
   if (!user) {
@@ -471,7 +473,7 @@ export default function Chat() {
             <h2 className="flex items-center gap-2 text-sm font-semibold">
               <Users className="h-4 w-4 text-primary-600" /> People
             </h2>
-            <span className="text-xs text-slate-500">{users.length}</span>
+            <span className="text-xs text-slate-500">{normalizedUserSearch ? filteredUsers.length + ' of ' + users.length : users.length}</span>
           </div>
           <div className="relative">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
@@ -479,9 +481,19 @@ export default function Chat() {
               value={userSearch}
               onChange={(event) => setUserSearch(event.target.value)}
               placeholder="Search users..."
-              className="input-field w-full py-2 pl-10 text-sm"
+              className="input-field w-full py-2 pl-10 pr-10 text-sm transition-shadow focus:shadow-md"
               aria-label="Search users"
             />
+            {userSearch && (
+              <button
+                type="button"
+                onClick={() => setUserSearch('')}
+                className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md p-1 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800 dark:hover:text-slate-200"
+                aria-label="Clear user search"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            )}
           </div>
           <div className="mt-3 max-h-56 overflow-y-auto scrollbar-thin">
             {loadingUsers ? (
@@ -493,20 +505,34 @@ export default function Chat() {
             ) : filteredUsers.length === 0 ? (
               <p className="px-1 py-2 text-xs text-slate-500">{users.length === 0 ? 'No users found.' : 'No matching users.'}</p>
             ) : (
-              <div className="space-y-1">
-                {filteredUsers.map((person) => (
-                  <div key={person.id} className="flex items-center gap-3 rounded-lg p-2 hover:bg-slate-100 dark:hover:bg-slate-800">
-                    {person.avatar_url ? (
-                      <img src={person.avatar_url} alt="" className="h-8 w-8 rounded-full object-cover" />
-                    ) : (
-                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-primary-500 to-gold-500 text-xs font-bold text-white">
-                        {(person.username || '?').charAt(0).toUpperCase()}
-                      </div>
-                    )}
-                    <span className="min-w-0 truncate text-sm font-medium">{person.username || 'Unnamed user'}</span>
-                  </div>
-                ))}
-              </div>
+              <AnimatePresence initial={false}>
+                <div className="space-y-1">
+                  {filteredUsers.map((person) => (
+                    <motion.button
+                      key={person.id}
+                      type="button"
+                      layout
+                      initial={{ opacity: 0, y: 4 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -4 }}
+                      transition={{ duration: 0.15 }}
+                      onClick={() => setSelectedUser(person)}
+                      className="flex w-full items-center gap-3 rounded-lg p-2 text-left transition-colors hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-primary-500 dark:hover:bg-slate-800"
+                      aria-label="View user profile"
+                    >
+                      {person.avatar_url ? (
+                        <img src={person.avatar_url} alt="" className="h-8 w-8 rounded-full object-cover" />
+                      ) : (
+                        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-primary-500 to-gold-500 text-xs font-bold text-white">
+                          {(person.username || '?').charAt(0).toUpperCase()}
+                        </div>
+                      )}
+                      <span className="min-w-0 flex-1 truncate text-sm font-medium">{person.username || 'Unnamed user'}</span>
+                      <span className="text-xs text-primary-600 dark:text-primary-400">View</span>
+                    </motion.button>
+                  ))}
+                </div>
+              </AnimatePresence>
             )}
           </div>
         </div>
@@ -731,6 +757,53 @@ export default function Chat() {
           </div>
         )}
       </div>
+
+      <AnimatePresence>
+        {selectedUser && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+            onClick={() => setSelectedUser(null)}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.96, y: 8 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.96, y: 8 }}
+              transition={{ duration: 0.18 }}
+              role="dialog"
+              aria-modal="true"
+              aria-label={selectedUser.username || 'User profile'}
+              className="w-full max-w-sm overflow-hidden rounded-2xl bg-white shadow-2xl dark:bg-slate-900"
+              onClick={(event) => event.stopPropagation()}
+            >
+              <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4 dark:border-slate-700">
+                <h2 className="text-lg font-bold">User profile</h2>
+                <button
+                  type="button"
+                  onClick={() => setSelectedUser(null)}
+                  className="rounded-lg p-2 text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-900 dark:hover:bg-slate-800 dark:hover:text-white"
+                  aria-label="Close user profile"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+              <div className="p-6 text-center">
+                {selectedUser.avatar_url ? (
+                  <img src={selectedUser.avatar_url} alt="" className="mx-auto h-24 w-24 rounded-full object-cover ring-4 ring-primary-100 dark:ring-primary-900/40" />
+                ) : (
+                  <div className="mx-auto flex h-24 w-24 items-center justify-center rounded-full bg-gradient-to-br from-primary-500 to-gold-500 text-3xl font-bold text-white">
+                    {(selectedUser.username || '?').charAt(0).toUpperCase()}
+                  </div>
+                )}
+                <h3 className="mt-4 text-xl font-bold">{selectedUser.username || 'Unnamed user'}</h3>
+                <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Community member</p>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
