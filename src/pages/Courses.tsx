@@ -36,7 +36,7 @@ const getYouTubeId = (value?: string | null) => {
     if (host === 'youtube.com' || host === 'm.youtube.com') {
       return normalize(
         url.searchParams.get('v') ||
-        url.pathname.match(/^\\/(?:embed|shorts|v)\\/([^/?]+)/)?.[1],
+        (url.pathname.match(/^\/(?:embed|shorts|v)\/([^/?]+)/) || [])[1],
       );
     }
   } catch {
@@ -44,7 +44,7 @@ const getYouTubeId = (value?: string | null) => {
   }
 
   return normalize(
-    value.match(/(?:youtu\\.be\\/|youtube\\.com\\/(?:watch\\?v=|embed\\/|shorts\\/|v\\/))([A-Za-z0-9_-]{11})/)?.[1],
+    (value.match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?v=|embed\/|shorts\/|v\/))([A-Za-z0-9_-]{11})/) || [])[1],
   );
 };
 
