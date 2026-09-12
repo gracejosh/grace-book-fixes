@@ -462,60 +462,13 @@ export default function Chat() {
       {/* Sidebar */}
       <div className={`w-80 border-r border-slate-200 dark:border-slate-700 flex flex-col bg-white dark:bg-slate-900 ${showMobileChat ? 'hidden md:flex' : 'flex'}`}>
         <div className="p-4 border-b border-slate-200 dark:border-slate-700">
-          <div className="flex items-center justify-between mb-3">
-            <h1 className="text-xl font-bold flex items-center gap-2">
-              <MessageCircle className="h-5 w-5 text-primary-600" /> Chat
-            </h1>
-            <button onClick={() => setShowNewRoom(!showNewRoom)} className="p-2 rounded-xl bg-primary-600 text-white hover:scale-105 transition-transform" title="Create new room">
-              <Plus className="h-4 w-4" />
-            </button>
-          </div>
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-            <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search rooms..." className="input-field pl-10 py-2 text-sm" />
-          </div>
+          <h1 className="text-xl font-bold flex items-center gap-2">
+            <MessageCircle className="h-5 w-5 text-primary-600" /> Chat
+          </h1>
         </div>
 
-        <AnimatePresence>
-          {showNewRoom && (
-            <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden border-b border-slate-200 dark:border-slate-700">
-              <div className="p-4 space-y-3">
-                <input value={roomName} onChange={(e) => setRoomName(e.target.value)} placeholder="Room name" className="input-field py-2 text-sm" />
-                <div className="flex gap-2">
-                  <button onClick={() => setRoomType('public')} className={`flex-1 py-2 rounded-lg text-sm font-medium ${roomType === 'public' ? 'bg-primary-600 text-white' : 'glass'}`}>Public</button>
-                  <button onClick={() => setRoomType('private')} className={`flex-1 py-2 rounded-lg text-sm font-medium ${roomType === 'private' ? 'bg-primary-600 text-white' : 'glass'}`}>Private</button>
-                </div>
-                <button onClick={createRoom} className="btn-primary w-full py-2 text-sm">Create Room</button>
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
+        <div className="flex-1 min-h-0 overflow-y-auto scrollbar-thin">
 
-        <div className="flex-1 overflow-y-auto scrollbar-thin">
-          {loading ? (
-            <div className="p-4 space-y-2">{Array.from({ length: 4 }).map((_, i) => <div key={i} className="skeleton h-16 rounded-xl" />)}</div>
-          ) : filteredRooms.length === 0 ? (
-            <div className="text-center py-8 px-4">
-              <MessageCircle className="h-12 w-12 text-slate-300 mx-auto mb-3" />
-              <p className="text-slate-500 text-sm">{rooms.length === 0 ? 'No chat rooms yet. Create one!' : 'No rooms found'}</p>
-            </div>
-          ) : (
-            filteredRooms.map((room) => (
-              <button key={room.id} onClick={() => joinRoom(room)}
-                className={`w-full flex items-center gap-3 p-3 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors text-left ${selectedRoom?.id === room.id ? 'bg-primary-50 dark:bg-primary-900/20' : ''}`}>
-                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary-500 to-gold-500 flex items-center justify-center shrink-0">
-                  {room.type === 'private' ? <Lock className="h-5 w-5 text-white" /> : <Hash className="h-5 w-5 text-white" />}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="font-semibold text-sm truncate">{room.name}</p>
-                  <p className="text-xs text-slate-500 flex items-center gap-1">
-                    <Users className="h-3 w-3" /> {room.participants?.length || 0} members
-                  </p>
-                </div>
-              </button>
-            ))
-          )}
-        </div>
         <div className="border-t border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-3">
           <div className="mb-3 flex items-center justify-between">
             <h2 className="flex items-center gap-2 text-sm font-semibold">
@@ -583,6 +536,63 @@ export default function Chat() {
               </AnimatePresence>
             )}
           </div>
+        </div>
+
+        <div className="border-t border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-3">
+          <button onClick={() => setShowNewRoom(!showNewRoom)} className="flex w-full items-center justify-center gap-2 rounded-xl bg-primary-600 px-3 py-2.5 text-sm font-semibold text-white transition hover:bg-primary-700" title="Create new group">
+            <Plus className="h-4 w-4" />
+            {showNewRoom ? 'Close group form' : 'Create Group'}
+          </button>
+        </div>
+
+        <AnimatePresence>
+          {showNewRoom && (
+            <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden border-b border-slate-200 dark:border-slate-700">
+              <div className="p-4 space-y-3">
+                <input value={roomName} onChange={(e) => setRoomName(e.target.value)} placeholder="Room name" className="input-field py-2 text-sm" />
+                <div className="flex gap-2">
+                  <button onClick={() => setRoomType('public')} className={`flex-1 py-2 rounded-lg text-sm font-medium ${roomType === 'public' ? 'bg-primary-600 text-white' : 'glass'}`}>Public</button>
+                  <button onClick={() => setRoomType('private')} className={`flex-1 py-2 rounded-lg text-sm font-medium ${roomType === 'private' ? 'bg-primary-600 text-white' : 'glass'}`}>Private</button>
+                </div>
+                <button onClick={createRoom} className="btn-primary w-full py-2 text-sm">Create Room</button>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        <div className="border-t border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-3">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+            <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search groups..." className="input-field w-full py-2 pl-10 text-sm" aria-label="Search groups" />
+          </div>
+        </div>
+
+        <div className="flex-1 overflow-y-auto scrollbar-thin">
+          {loading ? (
+            <div className="p-4 space-y-2">{Array.from({ length: 4 }).map((_, i) => <div key={i} className="skeleton h-16 rounded-xl" />)}</div>
+          ) : filteredRooms.length === 0 ? (
+            <div className="text-center py-8 px-4">
+              <MessageCircle className="h-12 w-12 text-slate-300 mx-auto mb-3" />
+              <p className="text-slate-500 text-sm">{rooms.length === 0 ? 'No chat rooms yet. Create one!' : 'No rooms found'}</p>
+            </div>
+          ) : (
+            filteredRooms.map((room) => (
+              <button key={room.id} onClick={() => joinRoom(room)}
+                className={`w-full flex items-center gap-3 p-3 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors text-left ${selectedRoom?.id === room.id ? 'bg-primary-50 dark:bg-primary-900/20' : ''}`}>
+                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary-500 to-gold-500 flex items-center justify-center shrink-0">
+                  {room.type === 'private' ? <Lock className="h-5 w-5 text-white" /> : <Hash className="h-5 w-5 text-white" />}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="font-semibold text-sm truncate">{room.name}</p>
+                  <p className="text-xs text-slate-500 flex items-center gap-1">
+                    <Users className="h-3 w-3" /> {room.participants?.length || 0} members
+                  </p>
+                </div>
+              </button>
+            ))
+          )}
+        </div>
+
         </div>
       </div>
 
