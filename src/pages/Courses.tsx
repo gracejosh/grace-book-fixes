@@ -16,6 +16,7 @@ const Courses: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedCourse, setSelectedCourse] = useState<Course | null>(null);
+  const [modalError, setModalError] = useState<string | null>(null);
 
   const fetchCourses = useCallback(async () => {
     setLoading(true);
@@ -29,7 +30,12 @@ const Courses: React.FC = () => {
       if (error) throw error;
       setCourses(data || []);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to fetch courses');
+      const message = err instanceof Error
+        ? err.message
+        : typeof err === 'object' && err !== null && 'message' in err
+          ? String(err.message)
+          : 'Failed to fetch courses';
+      setError(message);
     } finally {
       setLoading(false);
     }
@@ -39,11 +45,30 @@ const Courses: React.FC = () => {
     fetchCourses();
   }, [fetchCourses]);
 
-  const getYouTubeId = (url: string) => {
-    const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
-    const match = url.match(regExp);
-    return match && match[2].length === 11 ? match[2] : null;
+  const getYouTubeId = (url?: string | null) => {
+    if (!url || typeof url !== 'string') return null;
+
+    try {
+      const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
+      const match = url.match(regExp);
+      return match?.[2]?.length === 11 ? match[2] : null;
+    } catch {
+      return null;
+    }
   };
+
+  const handleCourseClick = (course: Course) => {
+    try {
+      if (!course?.id) throw new Error('This course cannot be opened.');
+      setModalError(null);
+      setSelectedCourse(course);
+    } catch (err) {
+      setSelectedCourse(null);
+      setModalError(err instanceof Error ? err.message : 'Unable to open this course.');
+    }
+  };
+
+  const videoId = selectedCourse ? videoId : null;
 
   if (loading) {
     return (
@@ -82,6 +107,12 @@ const Courses: React.FC = () => {
     <div className="container mx-auto px-4 py-8">
       <h1 className="text-3xl font-bold mb-8">Courses</h1>
 
+      {modalError && (
+        <div role="alert" className="mb-6 rounded-lg border border-red-200 bg-red-50 p-4 text-red-700 dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-300">
+          {modalError}
+        </div>
+      )}
+
       {courses.length === 0 ? (
         <div className="text-center py-12">
           <p className="text-gray-500 text-lg">No courses available yet</p>
@@ -89,20 +120,29 @@ const Courses: React.FC = () => {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {courses.map((course) => (
-            <div key={course.id} className="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow">
-              <div className="relative h-48 cursor-pointer" onClick={() => setSelectedCourse(course)}>
+            <div key={course.id} className="group rounded-xl border border-slate-200 bg-white text-slate-900 shadow-md overflow-hidden transition-shadow hover:shadow-lg dark:border-slate-700 dark:bg-slate-800 dark:text-white">
+              <div
+                className="relative h-48 cursor-pointer bg-slate-100 dark:bg-slate-700"
+                onClick={() => handleCourseClick(course)}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' || event.key === ' ') handleCourseClick(course);
+                }}
+                aria-label="Open course"
+              >
                 <img
                   src={course.thumbnail_url || '/placeholder-course.jpg'}
-                  alt={course.title}
+                  alt={course.title || 'Course thumbnail'}
                   className="w-full h-full object-cover"
                 />
-                <div className="absolute inset-0 bg-black bg-opacity-30 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity">
+                <div className="absolute inset-0 flex items-center justify-center bg-black/30 opacity-0 transition-opacity group-hover:opacity-100">
                   <Play className="w-16 h-16 text-white" />
                 </div>
               </div>
               <div className="p-4">
-                <h3 className="font-semibold text-lg mb-2">{course.title}</h3>
-                <p className="text-gray-600 text-sm line-clamp-3">{course.description}</p>
+                <h3 className="mb-2 text-lg font-semibold">{course.title || 'Untitled course'}</h3>
+                <p className="line-clamp-3 text-sm text-slate-600 dark:text-slate-300">{course.description || 'No description available.'}</p>
               </div>
             </div>
           ))}
@@ -122,7 +162,7 @@ const Courses: React.FC = () => {
                 <X className="w-6 h-6" />
               </button>
             </div>
-            <div className="aspect-w-16 aspect-h-9">
+            <div className="aspect-video bg-slate-100 dark:bg-slate-700">
               {getYouTubeId(selectedCourse.youtube_url) ? (
                 <iframe
                   src={`https://www.youtube.com/embed/${getYouTubeId(selectedCourse.youtube_url)}`}
@@ -132,8 +172,8 @@ const Courses: React.FC = () => {
                   allowFullScreen
                 />
               ) : (
-                <div className="w-full h-full flex items-center justify-center bg-gray-100">
-                  <p className="text-gray-500">Invalid video URL</p>
+                <div className="flex h-full w-full items-center justify-center bg-slate-100 dark:bg-slate-700">
+                  <p className="text-slate-500 dark:text-slate-300">This course does not have a valid video URL.</p>
                 </div>
               )}
             </div>
