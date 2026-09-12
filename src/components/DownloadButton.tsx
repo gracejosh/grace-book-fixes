@@ -67,7 +67,12 @@ export function DownloadButton({ url, filename, label = 'Download', className = 
     }, [url, filename, onDownloaded, progress]);
 
   return (
-    <button onClick={handleDownload} className={className} disabled={progress !== null}>
+    <button
+      type="button"
+      onClick={handleDownload}
+      className={`inline-flex min-h-[42px] items-center justify-center rounded-lg border border-emerald-300 bg-emerald-100 px-3 py-2 text-sm font-semibold text-emerald-950 shadow-sm transition-colors hover:bg-emerald-200 disabled:cursor-not-allowed disabled:opacity-70 ${className}`}
+      disabled={progress !== null}
+    >
       {progress !== null ? (
         <span className="inline-flex items-center gap-1.5">
           {done ? <CheckCircle className="h-4 w-4 text-emerald-500" /> : <Loader className="h-4 w-4 animate-spin" />}
