@@ -12,64 +12,70 @@ interface DownloadButtonProps {
 export function DownloadButton({ url, filename, label = 'Download', className = '', onDownloaded }: DownloadButtonProps) {
   const [progress, setProgress] = useState<number | null>(null);
   const [done, setDone] = useState(false);
+  const [error, setError] = useState(false);
 
   const handleDownload = useCallback(async () => {
-    setProgress(0);
-    setDone(false);
-    try {
-      const response = await fetch(url);
-      if (!response.ok) throw new Error('Download failed');
+      if (progress !== null) return;
 
-      const contentLength = response.headers.get('content-length');
-      const total = contentLength ? parseInt(contentLength) : 0;
-      const reader = response.body?.getReader();
-      if (!reader) throw new Error('No response body');
+      setProgress(0);
+      setDone(false);
+      setError(false);
 
-      const chunks: Uint8Array[] = [];
-      let received = 0;
-      while (true) {
-        const { done: streamDone, value } = await reader.read();
-        if (streamDone) break;
-        if (value) {
-          chunks.push(value);
-          received += value.length;
-          if (total > 0) setProgress(Math.round((received / total) * 100));
+      try {
+        const response = await fetch(url);
+        if (!response.ok) throw new Error('Download failed');
+
+        const contentLength = response.headers.get('content-length');
+        const total = contentLength ? parseInt(contentLength, 10) : 0;
+        const reader = response.body?.getReader();
+        if (!reader) throw new Error('No response body');
+
+        const chunks: Uint8Array[] = [];
+        let received = 0;
+        while (true) {
+          const { done: streamDone, value } = await reader.read();
+          if (streamDone) break;
+          if (value) {
+            chunks.push(value);
+            received += value.length;
+            if (total > 0) setProgress(Math.min(99, Math.round((received / total) * 100)));
+          }
         }
+
+        const blob = new Blob(chunks as BlobPart[]);
+        const downloadUrl = window.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = downloadUrl;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        window.URL.revokeObjectURL(downloadUrl);
+
+        setProgress(100);
+        setDone(true);
+        onDownloaded?.();
+        window.setTimeout(() => {
+          setProgress(null);
+          setDone(false);
+        }, 2000);
+      } catch {
+        setProgress(null);
+        setError(true);
+        window.setTimeout(() => setError(false), 2500);
       }
-
-      const blob = new Blob(chunks as BlobPart[]);
-      const downloadUrl = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = downloadUrl;
-      a.download = filename;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      window.URL.revokeObjectURL(downloadUrl);
-
-      setProgress(100);
-      setDone(true);
-      onDownloaded?.();
-      setTimeout(() => { setProgress(null); setDone(false); }, 2000);
-    } catch {
-      setProgress(null);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = filename;
-      a.target = '_blank';
-      a.rel = 'noopener noreferrer';
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-    }
-  }, [url, filename, onDownloaded]);
+    }, [url, filename, onDownloaded, progress]);
 
   return (
-    <button onClick={handleDownload} className={className} disabled={progress !== null && progress < 100}>
+    <button onClick={handleDownload} className={className} disabled={progress !== null}>
       {progress !== null ? (
         <span className="inline-flex items-center gap-1.5">
           {done ? <CheckCircle className="h-4 w-4 text-emerald-500" /> : <Loader className="h-4 w-4 animate-spin" />}
-          {done ? 'Done' : `${progress}%`}
+          {done ? 'Downloaded ✓' : `${progress}%`}
+        </span>
+      ) : error ? (
+        <span className="inline-flex items-center gap-1.5 text-red-500">
+          Download failed
         </span>
       ) : (
         <span className="inline-flex items-center gap-1.5">
