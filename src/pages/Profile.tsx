@@ -4,7 +4,7 @@ import { supabase, uploadToCloudinary } from '@/lib/supabase';
 import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/context/ToastContext';
 import type { QuizResult, BookDownload, CourseProgress } from '@/types';
-import { User, Mail, Lock, Eye, EyeOff, Camera, Edit2, Save, X, Award, BookOpen, Download, GraduationCap, BrainCircuit, LogOut, KeyRound, Star } from 'lucide-react';
+import { User, Mail, Lock, Eye, EyeOff, Camera, Edit2, Save, X, Award, Download, GraduationCap, BrainCircuit, LogOut, KeyRound, Star, Link2, Send, MessageCircle, Music, Phone, Globe } from 'lucide-react';
 
 export default function Profile() {
   const { user, profile, loading, signUp, signIn, signOut, refreshProfile } = useAuth();
@@ -140,7 +140,7 @@ function AuthForm({ onSignUp, onSignIn, showToast }: {
 
 function ProfileDashboard({ user, profile, showToast, signOut, refreshProfile }: {
   user: { id: string; email?: string };
-  profile: { username: string | null; full_name: string | null; avatar_url: string | null; bio: string | null; is_admin: boolean; created_at: string } | null;
+  profile: { username: string | null; full_name: string | null; avatar_url: string | null; bio: string | null; facebook_url: string | null; telegram_url: string | null; whatsapp_number: string | null; tiktok_url: string | null; phone_number: string | null; website_url: string | null; is_admin: boolean; created_at: string } | null;
   showToast: (m: string, t?: 'success' | 'error' | 'info' | 'warning') => void;
   signOut: () => Promise<void>;
   refreshProfile: () => Promise<void>;
@@ -149,6 +149,12 @@ function ProfileDashboard({ user, profile, showToast, signOut, refreshProfile }:
   const [username, setUsername] = useState(profile?.username ?? '');
   const [fullName, setFullName] = useState(profile?.full_name ?? '');
   const [bio, setBio] = useState(profile?.bio ?? '');
+  const [facebookUrl, setFacebookUrl] = useState(profile?.facebook_url ?? '');
+  const [telegramUrl, setTelegramUrl] = useState(profile?.telegram_url ?? '');
+  const [whatsappNumber, setWhatsappNumber] = useState(profile?.whatsapp_number ?? '');
+  const [tiktokUrl, setTiktokUrl] = useState(profile?.tiktok_url ?? '');
+  const [phoneNumber, setPhoneNumber] = useState(profile?.phone_number ?? '');
+  const [websiteUrl, setWebsiteUrl] = useState(profile?.website_url ?? '');
   const [uploading, setUploading] = useState(false);
   const [stats, setStats] = useState({ quizzes: 0, books: 0, courses: 0, bestScore: 0 });
   const [recentResults, setRecentResults] = useState<QuizResult[]>([]);
@@ -189,7 +195,18 @@ function ProfileDashboard({ user, profile, showToast, signOut, refreshProfile }:
   };
 
   const saveProfile = async () => {
-    const { error } = await supabase.from('profiles').update({ username, full_name: fullName, bio }).eq('id', user.id);
+    const optionalValue = (value: string) => value.trim() || null;
+    const { error } = await supabase.from('profiles').update({
+      username: optionalValue(username),
+      full_name: optionalValue(fullName),
+      bio: optionalValue(bio),
+      facebook_url: optionalValue(facebookUrl),
+      telegram_url: optionalValue(telegramUrl),
+      whatsapp_number: optionalValue(whatsappNumber),
+      tiktok_url: optionalValue(tiktokUrl),
+      phone_number: optionalValue(phoneNumber),
+      website_url: optionalValue(websiteUrl),
+    }).eq('id', user.id);
     if (error) {
       showToast('Could not save profile', 'error');
       return;
@@ -244,16 +261,62 @@ function ProfileDashboard({ user, profile, showToast, signOut, refreshProfile }:
 
             <div className="flex-1 text-center sm:text-left">
               {editing ? (
-                <div className="space-y-3">
-                  <input value={username} onChange={(e) => setUsername(e.target.value)} placeholder="Username" className="input-field" />
-                  <input value={fullName} onChange={(e) => setFullName(e.target.value)} placeholder="Full name" className="input-field" />
-                  <textarea value={bio} onChange={(e) => setBio(e.target.value)} placeholder="Tell us about yourself..." className="input-field min-h-[80px]" />
+                <div className="space-y-5 text-left">
+                  <div>
+                    <h2 className="text-lg font-bold">Edit profile</h2>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Add only the details you want to share. Every field is optional.</p>
+                  </div>
+
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <label className="text-sm font-medium">
+                      <span className="mb-1.5 flex items-center gap-2"><User className="h-4 w-4 text-primary-600" /> Full Name</span>
+                      <input value={fullName} onChange={(e) => setFullName(e.target.value)} placeholder="Your Name" className="input-field" />
+                    </label>
+                    <label className="text-sm font-medium">
+                      <span className="mb-1.5 flex items-center gap-2"><User className="h-4 w-4 text-primary-600" /> Username</span>
+                      <input value={username} onChange={(e) => setUsername(e.target.value)} placeholder="yourname" className="input-field" />
+                    </label>
+                    <label className="text-sm font-medium sm:col-span-2">
+                      <span className="mb-1.5 flex items-center gap-2"><Edit2 className="h-4 w-4 text-primary-600" /> Bio</span>
+                      <textarea value={bio} onChange={(e) => setBio(e.target.value)} placeholder="Tell us about yourself..." className="input-field min-h-[80px]" />
+                    </label>
+                  </div>
+
+                  <div>
+                    <h3 className="text-sm font-bold mb-3">Social links</h3>
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <label className="text-sm font-medium">
+                        <span className="mb-1.5 flex items-center gap-2"><Link2 className="h-4 w-4 text-primary-600" /> Facebook URL</span>
+                        <input type="url" value={facebookUrl} onChange={(e) => setFacebookUrl(e.target.value)} placeholder="https://facebook.com/yourname" className="input-field" />
+                      </label>
+                      <label className="text-sm font-medium">
+                        <span className="mb-1.5 flex items-center gap-2"><Send className="h-4 w-4 text-primary-600" /> Telegram URL</span>
+                        <input type="url" value={telegramUrl} onChange={(e) => setTelegramUrl(e.target.value)} placeholder="https://t.me/yourname" className="input-field" />
+                      </label>
+                      <label className="text-sm font-medium">
+                        <span className="mb-1.5 flex items-center gap-2"><MessageCircle className="h-4 w-4 text-primary-600" /> WhatsApp number</span>
+                        <input type="tel" value={whatsappNumber} onChange={(e) => setWhatsappNumber(e.target.value)} placeholder="+251..." className="input-field" />
+                      </label>
+                      <label className="text-sm font-medium">
+                        <span className="mb-1.5 flex items-center gap-2"><Music className="h-4 w-4 text-primary-600" /> TikTok URL</span>
+                        <input type="url" value={tiktokUrl} onChange={(e) => setTiktokUrl(e.target.value)} placeholder="https://tiktok.com/@yourname" className="input-field" />
+                      </label>
+                      <label className="text-sm font-medium">
+                        <span className="mb-1.5 flex items-center gap-2"><Phone className="h-4 w-4 text-primary-600" /> Phone number</span>
+                        <input type="tel" value={phoneNumber} onChange={(e) => setPhoneNumber(e.target.value)} placeholder="+251..." className="input-field" />
+                      </label>
+                      <label className="text-sm font-medium">
+                        <span className="mb-1.5 flex items-center gap-2"><Globe className="h-4 w-4 text-primary-600" /> Website URL</span>
+                        <input type="url" value={websiteUrl} onChange={(e) => setWebsiteUrl(e.target.value)} placeholder="https://..." className="input-field" />
+                      </label>
+                    </div>
+                  </div>
+
                   <div className="flex gap-2">
                     <button onClick={saveProfile} className="btn-primary"><Save className="h-4 w-4" /> Save</button>
                     <button onClick={() => setEditing(false)} className="btn-ghost"><X className="h-4 w-4" /> Cancel</button>
                   </div>
-                </div>
-              ) : (
+                </div>              ) : (
                 <>
                   <div className="flex items-center justify-center sm:justify-start gap-2 mb-1">
                     <h1 className="text-2xl font-bold">{profile?.username ?? 'User'}</h1>
