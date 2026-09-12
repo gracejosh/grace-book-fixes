@@ -319,7 +319,7 @@ const Books: React.FC = () => {
                           url={book.pdf_url}
                           filename={`${book.title}.pdf`}
                           label="PDF"
-                          className="flex-1 inline-flex items-center justify-center px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm"
+                          className="flex-1"
                         />
                       )}
                       {book.epub_url && (
@@ -327,7 +327,7 @@ const Books: React.FC = () => {
                           url={book.epub_url}
                           filename={`${book.title}.epub`}
                           label="EPUB"
-                          className="flex-1 inline-flex items-center justify-center px-3 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm"
+                          className="flex-1"
                         />
                       )}
                     </div>
