@@ -34,6 +34,10 @@ export default function Chat() {
   const [showEmoji, setShowEmoji] = useState(false);
   const [search, setSearch] = useState('');
   const [profiles, setProfiles] = useState<Record<string, Profile>>({});
+  const [users, setUsers] = useState<Profile[]>([]);
+  const [userSearch, setUserSearch] = useState('');
+  const [loadingUsers, setLoadingUsers] = useState(false);
+  const [usersError, setUsersError] = useState<string | null>(null);
   const [showMobileChat, setShowMobileChat] = useState(false);
   const [sendingMessage, setSendingMessage] = useState(false);
   const [typingUsers, setTypingUsers] = useState<string[]>([]);
@@ -71,6 +75,38 @@ export default function Chat() {
     };
     fetchRooms();
   }, []);
+
+  // Load the people directory separately from chat rooms so room behavior stays unchanged.
+  useEffect(() => {
+    if (!user) return;
+    let cancelled = false;
+
+    const fetchUsers = async () => {
+      setLoadingUsers(true);
+      setUsersError(null);
+      const { data, error: usersQueryError } = await supabase.from('profiles').select('*');
+      if (cancelled) return;
+
+      if (usersQueryError) {
+        setUsersError('Could not load users.');
+        setLoadingUsers(false);
+        return;
+      }
+
+      const nextUsers = ((data as Profile[] | null) ?? []).filter((person) => person.id !== user.id);
+      setUsers(nextUsers);
+      setProfiles((previous) => {
+        const next = { ...previous };
+        nextUsers.forEach((person) => { next[person.id] = person; });
+        profilesRef.current = next;
+        return next;
+      });
+      setLoadingUsers(false);
+    };
+
+    fetchUsers();
+    return () => { cancelled = true; };
+  }, [user]);
 
   const loadProfiles = useCallback(async (ids: string[]) => {
     const uniqueIds = [...new Set(ids)].filter((id) => id && !profilesRef.current[id]);
@@ -346,6 +382,7 @@ export default function Chat() {
   };
 
   const filteredRooms = rooms.filter((r) => r.name?.toLowerCase().includes(search.toLowerCase()) ?? false);
+  const filteredUsers = users.filter((person) => (person.username || '').toLowerCase().includes(userSearch.toLowerCase()));
   const formatTime = (iso: string) => new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
   if (!user) {
@@ -428,6 +465,50 @@ export default function Chat() {
               </button>
             ))
           )}
+        </div>
+        <div className="border-t border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-3">
+          <div className="mb-3 flex items-center justify-between">
+            <h2 className="flex items-center gap-2 text-sm font-semibold">
+              <Users className="h-4 w-4 text-primary-600" /> People
+            </h2>
+            <span className="text-xs text-slate-500">{users.length}</span>
+          </div>
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+            <input
+              value={userSearch}
+              onChange={(event) => setUserSearch(event.target.value)}
+              placeholder="Search users..."
+              className="input-field w-full py-2 pl-10 text-sm"
+              aria-label="Search users"
+            />
+          </div>
+          <div className="mt-3 max-h-56 overflow-y-auto scrollbar-thin">
+            {loadingUsers ? (
+              <div className="space-y-2">
+                {Array.from({ length: 3 }).map((_, index) => <div key={index} className="skeleton h-11 rounded-lg" />)}
+              </div>
+            ) : usersError ? (
+              <p className="px-1 py-2 text-xs text-red-500">{usersError}</p>
+            ) : filteredUsers.length === 0 ? (
+              <p className="px-1 py-2 text-xs text-slate-500">{users.length === 0 ? 'No users found.' : 'No matching users.'}</p>
+            ) : (
+              <div className="space-y-1">
+                {filteredUsers.map((person) => (
+                  <div key={person.id} className="flex items-center gap-3 rounded-lg p-2 hover:bg-slate-100 dark:hover:bg-slate-800">
+                    {person.avatar_url ? (
+                      <img src={person.avatar_url} alt="" className="h-8 w-8 rounded-full object-cover" />
+                    ) : (
+                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-primary-500 to-gold-500 text-xs font-bold text-white">
+                        {(person.username || '?').charAt(0).toUpperCase()}
+                      </div>
+                    )}
+                    <span className="min-w-0 truncate text-sm font-medium">{person.username || 'Unnamed user'}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
