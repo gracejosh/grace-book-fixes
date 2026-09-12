@@ -1,187 +1,213 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
-import { Play, X, RefreshCw } from 'lucide-react';
 
-interface Course {
+type Course = {
   id: string;
-  title: string;
-  description: string;
-  thumbnail_url: string;
-  youtube_url: string;
-  created_at: string;
-}
+  title?: string | null;
+  description?: string | null;
+  thumbnail_url?: string | null;
+  youtube_url?: string | null;
+};
 
-const Courses: React.FC = () => {
+const getErrorMessage = (error: unknown) => {
+  if (error instanceof Error) return error.message;
+  if (typeof error === 'object' && error !== null && 'message' in error) {
+    return String(error.message);
+  }
+  return 'We could not load the courses. Please try again.';
+};
+
+const getYouTubeId = (value?: string | null) => {
+  if (!value || typeof value !== 'string') return null;
+
+  const normalize = (candidate: string | null | undefined) => {
+    if (!candidate) return null;
+    return /^[A-Za-z0-9_-]{11}$/.test(candidate) ? candidate : null;
+  };
+
+  try {
+    const url = new URL(value);
+    const host = url.hostname.toLowerCase().replace(/^www\\./, '');
+
+    if (host === 'youtu.be') {
+      return normalize(url.pathname.split('/').filter(Boolean)[0]);
+    }
+
+    if (host === 'youtube.com' || host === 'm.youtube.com') {
+      return normalize(
+        url.searchParams.get('v') ||
+        url.pathname.match(/^\\/(?:embed|shorts|v)\\/([^/?]+)/)?.[1],
+      );
+    }
+  } catch {
+    // Fall through to the plain-text URL pattern below.
+  }
+
+  return normalize(
+    value.match(/(?:youtu\\.be\\/|youtube\\.com\\/(?:watch\\?v=|embed\\/|shorts\\/|v\\/))([A-Za-z0-9_-]{11})/)?.[1],
+  );
+};
+
+export default function Courses() {
   const [courses, setCourses] = useState<Course[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedCourse, setSelectedCourse] = useState<Course | null>(null);
-  const [modalError, setModalError] = useState<string | null>(null);
+  const [brokenImages, setBrokenImages] = useState<Record<string, boolean>>({});
 
-  const fetchCourses = useCallback(async () => {
+  const loadCourses = useCallback(async () => {
     setLoading(true);
     setError(null);
+
     try {
-      const { data, error } = await supabase
+      const { data, error: queryError } = await supabase
         .from('courses')
         .select('*')
         .order('created_at', { ascending: false });
 
-      if (error) throw error;
-      setCourses(data || []);
-    } catch (err) {
-      const message = err instanceof Error
-        ? err.message
-        : typeof err === 'object' && err !== null && 'message' in err
-          ? String(err.message)
-          : 'Failed to fetch courses';
-      setError(message);
+      if (queryError) throw queryError;
+      setCourses(Array.isArray(data) ? (data as Course[]) : []);
+    } catch (loadError) {
+      setCourses([]);
+      setError(getErrorMessage(loadError));
     } finally {
       setLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    fetchCourses();
-  }, [fetchCourses]);
+    void loadCourses();
+  }, [loadCourses]);
 
-  const getYouTubeId = (url?: string | null) => {
-    if (!url || typeof url !== 'string') return null;
-
-    try {
-      const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
-      const match = url.match(regExp);
-      return match?.[2]?.length === 11 ? match[2] : null;
-    } catch {
-      return null;
-    }
-  };
-
-  const handleCourseClick = (course: Course) => {
-    try {
-      if (!course?.id) throw new Error('This course cannot be opened.');
-      setModalError(null);
-      setSelectedCourse(course);
-    } catch (err) {
-      setSelectedCourse(null);
-      setModalError(err instanceof Error ? err.message : 'Unable to open this course.');
-    }
-  };
-
-  const videoId = selectedCourse ? videoId : null;
+  const selectedVideoId = selectedCourse ? getYouTubeId(selectedCourse.youtube_url) : null;
 
   if (loading) {
     return (
-      <div className="container mx-auto px-4 py-8">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {[...Array(6)].map((_, i) => (
-            <div key={i} className="animate-pulse">
-              <div className="bg-gray-200 rounded-lg h-48 mb-4"></div>
-              <div className="bg-gray-200 rounded h-4 w-3/4 mb-2"></div>
-              <div className="bg-gray-200 rounded h-4 w-full"></div>
+      <main className="mx-auto w-full max-w-6xl px-4 py-8">
+        <h1 className="mb-6 text-3xl font-bold text-slate-900 dark:text-white">Courses</h1>
+        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+          {Array.from({ length: 6 }).map((_, index) => (
+            <div key={index} className="animate-pulse overflow-hidden rounded-2xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-800">
+              <div className="h-44 bg-slate-200 dark:bg-slate-700" />
+              <div className="space-y-3 p-5">
+                <div className="h-5 w-3/4 rounded bg-slate-200 dark:bg-slate-700" />
+                <div className="h-4 w-full rounded bg-slate-200 dark:bg-slate-700" />
+              </div>
             </div>
           ))}
         </div>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="container mx-auto px-4 py-8">
-        <div className="bg-red-50 border border-red-200 rounded-lg p-6 text-center">
-          <p className="text-red-600 mb-4">{error}</p>
-          <button
-            onClick={fetchCourses}
-            className="inline-flex items-center px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
-          >
-            <RefreshCw className="w-4 h-4 mr-2" />
-            Retry
-          </button>
-        </div>
-      </div>
+      </main>
     );
   }
 
   return (
-    <div className="container mx-auto px-4 py-8">
-      <h1 className="text-3xl font-bold mb-8">Courses</h1>
+    <main className="mx-auto w-full max-w-6xl px-4 py-8">
+      <div className="mb-8">
+        <h1 className="text-3xl font-bold text-slate-900 dark:text-white">Courses</h1>
+        <p className="mt-2 text-slate-600 dark:text-slate-300">Choose a course to start learning.</p>
+      </div>
 
-      {modalError && (
-        <div role="alert" className="mb-6 rounded-lg border border-red-200 bg-red-50 p-4 text-red-700 dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-300">
-          {modalError}
+      {error && (
+        <div role="alert" className="mb-6 rounded-xl border border-red-200 bg-red-50 p-4 text-red-700 dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-300">
+          <p>{error}</p>
+          <button type="button" onClick={() => void loadCourses()} className="mt-3 rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700">
+            Try again
+          </button>
         </div>
       )}
 
-      {courses.length === 0 ? (
-        <div className="text-center py-12">
-          <p className="text-gray-500 text-lg">No courses available yet</p>
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {courses.map((course) => (
-            <div key={course.id} className="group rounded-xl border border-slate-200 bg-white text-slate-900 shadow-md overflow-hidden transition-shadow hover:shadow-lg dark:border-slate-700 dark:bg-slate-800 dark:text-white">
-              <div
-                className="relative h-48 cursor-pointer bg-slate-100 dark:bg-slate-700"
-                onClick={() => handleCourseClick(course)}
-                role="button"
-                tabIndex={0}
-                onKeyDown={(event) => {
-                  if (event.key === 'Enter' || event.key === ' ') handleCourseClick(course);
-                }}
-                aria-label="Open course"
-              >
-                <img
-                  src={course.thumbnail_url || '/placeholder-course.jpg'}
-                  alt={course.title || 'Course thumbnail'}
-                  className="w-full h-full object-cover"
-                />
-                <div className="absolute inset-0 flex items-center justify-center bg-black/30 opacity-0 transition-opacity group-hover:opacity-100">
-                  <Play className="w-16 h-16 text-white" />
-                </div>
-              </div>
-              <div className="p-4">
-                <h3 className="mb-2 text-lg font-semibold">{course.title || 'Untitled course'}</h3>
-                <p className="line-clamp-3 text-sm text-slate-600 dark:text-slate-300">{course.description || 'No description available.'}</p>
-              </div>
-            </div>
-          ))}
+      {!error && courses.length === 0 && (
+        <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-10 text-center dark:border-slate-600 dark:bg-slate-800">
+          <p className="text-lg font-medium text-slate-700 dark:text-slate-200">No courses available yet.</p>
         </div>
       )}
 
-      {/* Video Modal */}
-      {selectedCourse && (
-        <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg w-full max-w-4xl">
-            <div className="flex justify-between items-center p-4 border-b">
-              <h3 className="text-xl font-semibold">{selectedCourse.title}</h3>
+      {courses.length > 0 && (
+        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+          {courses.map((course) => {
+            const hasImage = Boolean(course.thumbnail_url) && !brokenImages[course.id];
+
+            return (
               <button
-                onClick={() => setSelectedCourse(null)}
-                className="p-1 hover:bg-gray-100 rounded-full"
+                key={course.id}
+                type="button"
+                onClick={() => setSelectedCourse(course)}
+                className="overflow-hidden rounded-2xl border border-slate-200 bg-white text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-slate-700 dark:bg-slate-800"
+                aria-label={
+                  course.title ? 'Open course ' + course.title : 'Open course'
+                }
               >
-                <X className="w-6 h-6" />
+                <div className="flex h-44 items-center justify-center bg-slate-100 dark:bg-slate-700">
+                  {hasImage ? (
+                    <img
+                      src={course.thumbnail_url as string}
+                      alt=""
+                      onError={() => setBrokenImages((previous) => ({ ...previous, [course.id]: true }))}
+                      className="h-full w-full object-cover"
+                    />
+                  ) : (
+                    <span className="text-sm font-semibold text-slate-500 dark:text-slate-300">Course</span>
+                  )}
+                </div>
+                <div className="p-5">
+                  <h2 className="text-lg font-semibold text-slate-900 dark:text-white">
+                    {course.title || 'Untitled course'}
+                  </h2>
+                  <p className="mt-2 line-clamp-3 text-sm leading-6 text-slate-600 dark:text-slate-300">
+                    {course.description || 'Start this course to begin learning.'}
+                  </p>
+                  <span className="mt-4 inline-block text-sm font-semibold text-blue-600 dark:text-blue-400">Open course →</span>
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      {selectedCourse && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label={selectedCourse.title || 'Course'}
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
+          onClick={() => setSelectedCourse(null)}
+        >
+          <section
+            className="w-full max-w-3xl overflow-hidden rounded-2xl bg-white shadow-2xl dark:bg-slate-900"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4 dark:border-slate-700">
+              <h2 className="text-xl font-bold text-slate-900 dark:text-white">
+                {selectedCourse.title || 'Course'}
+              </h2>
+              <button
+                type="button"
+                onClick={() => setSelectedCourse(null)}
+                className="rounded-lg px-3 py-1 text-2xl leading-none text-slate-500 hover:bg-slate-100 hover:text-slate-900 dark:hover:bg-slate-800 dark:hover:text-white"
+                aria-label="Close course"
+              >
+                ×
               </button>
             </div>
-            <div className="aspect-video bg-slate-100 dark:bg-slate-700">
-              {getYouTubeId(selectedCourse.youtube_url) ? (
+
+            {selectedVideoId ? (
+              <div className="aspect-video bg-black">
                 <iframe
-                  src={`https://www.youtube.com/embed/${getYouTubeId(selectedCourse.youtube_url)}`}
-                  title={selectedCourse.title}
-                  className="w-full h-full"
+                  src={'https://www.youtube.com/embed/' + selectedVideoId}
+                  title={selectedCourse.title || 'Course video'}
+                  className="h-full w-full"
                   allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                   allowFullScreen
                 />
-              ) : (
-                <div className="flex h-full w-full items-center justify-center bg-slate-100 dark:bg-slate-700">
-                  <p className="text-slate-500 dark:text-slate-300">This course does not have a valid video URL.</p>
-                </div>
-              )}
-            </div>
-          </div>
+              </div>
+            ) : (
+              <div className="flex min-h-64 items-center justify-center bg-slate-100 p-8 text-center dark:bg-slate-800">
+                <p className="text-slate-600 dark:text-slate-300">This course does not have a valid video yet.</p>
+              </div>
+            )}
+          </section>
         </div>
       )}
-    </div>
+    </main>
   );
-};
-
-export default Courses;
+}
