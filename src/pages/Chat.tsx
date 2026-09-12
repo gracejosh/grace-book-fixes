@@ -39,6 +39,7 @@ export default function Chat() {
   const [loadingUsers, setLoadingUsers] = useState(false);
   const [usersError, setUsersError] = useState<string | null>(null);
   const [selectedUser, setSelectedUser] = useState<Profile | null>(null);
+  const [openingUserId, setOpeningUserId] = useState<string | null>(null);
   const [showMobileChat, setShowMobileChat] = useState(false);
   const [sendingMessage, setSendingMessage] = useState(false);
   const [typingUsers, setTypingUsers] = useState<string[]>([]);
@@ -380,6 +381,53 @@ export default function Chat() {
         .eq('id', room.id);
     }
     setSelectedRoom(room);
+  };
+
+  const startDirectChat = async (person: Profile) => {
+    if (!user || !person.id || person.id === user.id || openingUserId) return;
+
+    setOpeningUserId(person.id);
+    try {
+      const { data: privateRooms, error: roomsError } = await supabase
+        .from('chat_rooms')
+        .select('*')
+        .eq('type', 'private')
+        .eq('is_active', true)
+        .contains('participants', [user.id, person.id]);
+      if (roomsError) throw roomsError;
+
+      const existingRoom = ((privateRooms as ChatRoom[] | null) ?? []).find((room) => {
+        const participants = room.participants || [];
+        return participants.length === 2 && participants.includes(user.id) && participants.includes(person.id);
+      });
+
+      let directRoom: ChatRoom | null = existingRoom || null;
+      if (!directRoom) {
+        const { data: createdRoom, error: createError } = await supabase
+          .from('chat_rooms')
+          .insert({
+            name: 'Chat with ' + (person.username || 'user'),
+            type: 'private',
+            created_by: user.id,
+            participants: [user.id, person.id],
+            is_active: true,
+          })
+          .select()
+          .single();
+        if (createError) throw createError;
+        directRoom = createdRoom as ChatRoom;
+      }
+
+      const roomToOpen = directRoom;
+      setRooms((previous) => previous.some((room) => room.id === roomToOpen.id) ? previous : [...previous, roomToOpen]);
+      setSelectedRoom(roomToOpen);
+      setSelectedUser(null);
+      setShowMobileChat(true);
+    } catch {
+      showToast('Could not start direct chat', 'error');
+    } finally {
+      setOpeningUserId(null);
+    }
   };
 
   const filteredRooms = rooms.filter((r) => r.name?.toLowerCase().includes(search.toLowerCase()) ?? false);
@@ -799,6 +847,15 @@ export default function Chat() {
                 )}
                 <h3 className="mt-4 text-xl font-bold">{selectedUser.username || 'Unnamed user'}</h3>
                 <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Community member</p>
+                <button
+                  type="button"
+                  onClick={() => void startDirectChat(selectedUser)}
+                  disabled={openingUserId === selectedUser.id}
+                  className="mt-5 inline-flex items-center justify-center gap-2 rounded-xl bg-primary-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-primary-700 disabled:cursor-wait disabled:opacity-70"
+                >
+                  {openingUserId === selectedUser.id ? <Loader className="h-4 w-4 animate-spin" /> : <MessageCircle className="h-4 w-4" />}
+                  {openingUserId === selectedUser.id ? 'Opening chat...' : 'Start chat'}
+                </button>
               </div>
             </motion.div>
           </motion.div>
