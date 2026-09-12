@@ -4,6 +4,12 @@ export interface Profile {
   full_name: string | null;
   avatar_url: string | null;
   bio: string | null;
+  facebook_url: string | null;
+  telegram_url: string | null;
+  whatsapp_number: string | null;
+  tiktok_url: string | null;
+  phone_number: string | null;
+  website_url: string | null;
   is_admin: boolean;
   is_banned: boolean;
   is_muted: boolean;
