@@ -18,6 +18,7 @@ import Profile from '@/pages/Profile';
 import Admin from '@/pages/Admin';
 import About from '@/pages/About';
 import Flyers from '@/pages/Flyers';
+import Blog from '@/pages/Blog';
 import Blogs from '@/pages/Blogs';
 import Settings from '@/pages/Settings';
 import Live from '@/pages/Live';
@@ -54,6 +55,7 @@ export default function App() {
                       <Route path="/admin" element={<Admin />} />
                       <Route path="/about" element={<About />} />
                       <Route path="/flyers" element={<Flyers />} />
+                      <Route path="/blog" element={<Blog />} />
                       <Route path="/blogs" element={<Blogs />} />
                       <Route path="/settings" element={<Settings />} />
                       <Route path="/live" element={<Live />} />
