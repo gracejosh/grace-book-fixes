@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
-import { Search, Filter, Download, ShoppingCart, RefreshCw } from 'lucide-react';
+import { Search, Filter, ShoppingCart, RefreshCw, Heart, Share2, Copy, MessageCircle, Send, Globe, Check } from 'lucide-react';
+import { DownloadButton } from '../components/DownloadButton';
 
 interface Book {
   id: string;
@@ -16,6 +17,11 @@ interface Book {
   created_at: string;
 }
 
+type LikeState = {
+  liked: boolean;
+  count: number;
+};
+
 const Books: React.FC = () => {
   const [books, setBooks] = useState<Book[]>([]);
   const [loading, setLoading] = useState(true);
@@ -24,6 +30,9 @@ const Books: React.FC = () => {
   const [sortBy, setSortBy] = useState<'newest' | 'oldest' | 'title' | 'author'>('newest');
   const [category, setCategory] = useState<string>('all');
   const [categories, setCategories] = useState<string[]>([]);
+  const [likedBooks, setLikedBooks] = useState<Record<string, LikeState>>({});
+  const [sharingBookId, setSharingBookId] = useState<string | null>(null);
+  const [copiedBookId, setCopiedBookId] = useState<string | null>(null);
 
   const fetchBooks = useCallback(async () => {
     setLoading(true);
@@ -51,6 +60,74 @@ const Books: React.FC = () => {
   useEffect(() => {
     fetchBooks();
   }, [fetchBooks]);
+
+  useEffect(() => {
+    try {
+      const storedLikes = window.localStorage.getItem('grace-book-likes');
+      if (storedLikes) setLikedBooks(JSON.parse(storedLikes) as Record<string, LikeState>);
+    } catch {
+      // Ignore malformed local storage and start with no likes.
+    }
+  }, []);
+
+  const toggleLike = (bookId: string) => {
+    setLikedBooks((current) => {
+      const previous = current[bookId] ?? { liked: false, count: 0 };
+      const next = {
+        ...current,
+        [bookId]: {
+          liked: !previous.liked,
+          count: Math.max(0, previous.count + (previous.liked ? -1 : 1)),
+        },
+      };
+      window.localStorage.setItem('grace-book-likes', JSON.stringify(next));
+      return next;
+    });
+  };
+
+  const getShareUrl = () => window.location.href;
+
+  const copyShareLink = async (book: Book) => {
+    try {
+      await navigator.clipboard.writeText(getShareUrl());
+      setCopiedBookId(book.id);
+      window.setTimeout(() => setCopiedBookId(null), 2000);
+    } catch {
+      // Clipboard permissions can be denied; leave the share menu open.
+    }
+  };
+
+  const shareWithWebApi = async (book: Book) => {
+    const shareData = {
+      title: book.title,
+      text: `${book.title} by ${book.author}`,
+      url: getShareUrl(),
+    };
+
+    if (navigator.share) {
+      try {
+        await navigator.share(shareData);
+        setSharingBookId(null);
+        return;
+      } catch (shareError) {
+        if (shareError instanceof DOMException && shareError.name === 'AbortError') return;
+      }
+    }
+
+    await copyShareLink(book);
+  };
+
+  const shareToPlatform = (platform: 'whatsapp' | 'facebook' | 'telegram', book: Book) => {
+    const url = encodeURIComponent(getShareUrl());
+    const text = encodeURIComponent(`${book.title} by ${book.author}`);
+    const shareUrls = {
+      whatsapp: `https://wa.me/?text=${text}%20${url}`,
+      facebook: `https://www.facebook.com/sharer/sharer.php?u=${url}`,
+      telegram: `https://t.me/share/url?url=${url}&text=${text}`,
+    };
+    window.open(shareUrls[platform], '_blank', 'noopener,noreferrer');
+    setSharingBookId(null);
+  };
 
   const filteredAndSortedBooks = useCallback(() => {
     let filtered = [...books];
@@ -86,23 +163,6 @@ const Books: React.FC = () => {
 
     return filtered;
   }, [books, searchTerm, sortBy, category]);
-
-  const handleDownload = async (url: string, filename: string) => {
-    try {
-      const response = await fetch(url);
-      const blob = await response.blob();
-      const downloadUrl = window.URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = downloadUrl;
-      link.download = filename;
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      window.URL.revokeObjectURL(downloadUrl);
-    } catch (error) {
-      console.error('Download failed:', error);
-    }
-  };
 
   if (loading) {
     return (
@@ -208,26 +268,67 @@ const Books: React.FC = () => {
                 <h3 className="font-semibold text-lg mb-1 line-clamp-2">{book.title}</h3>
                 <p className="text-gray-600 text-sm mb-3">{book.author}</p>
                 
+                <div className="flex items-center gap-2 mb-3">
+                  <button
+                    type="button"
+                    onClick={() => toggleLike(book.id)}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-200 text-sm hover:bg-rose-50 transition-colors"
+                    aria-label={likedBooks[book.id]?.liked ? 'Unlike book' : 'Like book'}
+                  >
+                    <Heart className={likedBooks[book.id]?.liked ? 'w-4 h-4 text-rose-500 fill-rose-500' : 'w-4 h-4 text-gray-500'} />
+                    <span>{likedBooks[book.id]?.count ?? 0}</span>
+                  </button>
+                  <div className="relative">
+                    <button
+                      type="button"
+                      onClick={() => setSharingBookId((current) => current === book.id ? null : book.id)}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-200 text-sm hover:bg-blue-50 transition-colors"
+                      aria-haspopup="menu"
+                      aria-expanded={sharingBookId === book.id}
+                    >
+                      <Share2 className="w-4 h-4 text-gray-500" /> Share
+                    </button>
+                    {sharingBookId === book.id && (
+                      <div className="absolute left-0 top-full z-20 mt-2 min-w-44 rounded-lg border border-gray-200 bg-white p-2 shadow-lg" role="menu">
+                        <button type="button" onClick={() => shareWithWebApi(book)} className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm hover:bg-gray-100">
+                          <Share2 className="w-4 h-4" /> Share…
+                        </button>
+                        <button type="button" onClick={() => shareToPlatform('whatsapp', book)} className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm hover:bg-gray-100">
+                          <MessageCircle className="w-4 h-4 text-green-600" /> WhatsApp
+                        </button>
+                        <button type="button" onClick={() => shareToPlatform('facebook', book)} className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm hover:bg-gray-100">
+                          <Globe className="w-4 h-4 text-blue-600" /> Facebook
+                        </button>
+                        <button type="button" onClick={() => shareToPlatform('telegram', book)} className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm hover:bg-gray-100">
+                          <Send className="w-4 h-4 text-sky-600" /> Telegram
+                        </button>
+                        <button type="button" onClick={() => copyShareLink(book)} className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm hover:bg-gray-100">
+                          {copiedBookId === book.id ? <Check className="w-4 h-4 text-green-600" /> : <Copy className="w-4 h-4" />}
+                          {copiedBookId === book.id ? 'Copied' : 'Copy Link'}
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
                 <div className="space-y-2">
                   {book.price_type === 'free' && (
                     <div className="flex gap-2">
                       {book.pdf_url && (
-                        <button
-                          onClick={() => handleDownload(book.pdf_url, `${book.title}.pdf`)}
+                        <DownloadButton
+                          url={book.pdf_url}
+                          filename={`${book.title}.pdf`}
+                          label="PDF"
                           className="flex-1 inline-flex items-center justify-center px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm"
-                        >
-                          <Download className="w-4 h-4 mr-1" />
-                          PDF
-                        </button>
+                        />
                       )}
                       {book.epub_url && (
-                        <button
-                          onClick={() => handleDownload(book.epub_url, `${book.title}.epub`)}
+                        <DownloadButton
+                          url={book.epub_url}
+                          filename={`${book.title}.epub`}
+                          label="EPUB"
                           className="flex-1 inline-flex items-center justify-center px-3 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm"
-                        >
-                          <Download className="w-4 h-4 mr-1" />
-                          EPUB
-                        </button>
+                        />
                       )}
                     </div>
                   )}
