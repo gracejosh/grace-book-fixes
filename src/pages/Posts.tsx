@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useNavigate } from 'react-router-dom';
 import { supabase, uploadToCloudinary } from '@/lib/supabase';
 import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/context/ToastContext';
@@ -50,6 +51,10 @@ const timeAgo = (date: string) => {
 export default function Posts() {
   const { user, profile } = useAuth();
   const { showToast } = useToast();
+  const navigate = useNavigate();
+  const openAuthorProfile = (authorId?: string) => {
+    if (authorId) navigate(`/profile?user=${encodeURIComponent(authorId)}`);
+  };
   const [posts, setPosts] = useState<Post[]>([]);
   const [authors, setAuthors] = useState<Record<string, Profile>>({});
   const [loading, setLoading] = useState(true);
@@ -334,7 +339,7 @@ export default function Posts() {
 
                       {/* Author */}
                       <div className="flex items-center gap-2 mb-3">
-                        <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-primary-400 to-gold-400 flex items-center justify-center text-white text-xs font-bold overflow-hidden">
+                        <div onClick={() => openAuthorProfile(author?.id)} className="w-7 h-7 rounded-lg bg-gradient-to-br from-primary-400 to-gold-400 flex items-center justify-center text-white text-xs font-bold overflow-hidden">
                           {author?.avatar_url ? (
                             <img src={author.avatar_url} alt="" className="w-full h-full object-cover" />
                           ) : (
@@ -342,7 +347,7 @@ export default function Posts() {
                           )}
                         </div>
                         <div className="flex-1 min-w-0">
-                          <p className="text-xs font-medium truncate">{author?.username || 'Unknown'}</p>
+                          <p onClick={() => openAuthorProfile(author?.id)} className="text-xs font-medium truncate">{author?.username || 'Unknown'}</p>
                           <p className="text-xs text-slate-400">{timeAgo(post.created_at)}</p>
                         </div>
                       </div>
