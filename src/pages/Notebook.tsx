@@ -84,6 +84,8 @@ export default function Notebook() {
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [search, setSearch] = useState('');
+  const [openedNote, setOpenedNote] = useState<Note | null>(null);
+  const [showFullImage, setShowFullImage] = useState(false);
   const [form, setForm] = useState({
     title: '',
     content: '',
@@ -349,19 +351,26 @@ export default function Notebook() {
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               className={`rounded-2xl p-4 border border-slate-200 dark:border-slate-700 shadow-sm group ${colorClassMap[note.color] ?? colorClassMap.gold}`}
+              onClick={() => setOpenedNote(note)}
             >
               <div className="flex items-start justify-between gap-2 mb-2">
                 <h3 className="font-bold text-sm">{note.title}</h3>
                 <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                   <button
-                    onClick={() => openEdit(note)}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      openEdit(note);
+                    }}
                     className="p-1 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700"
                     aria-label="Edit note"
                   >
                     <Pencil className="h-3.5 w-3.5 text-slate-500" />
                   </button>
                   <button
-                    onClick={() => del(note.id)}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      void del(note.id);
+                    }}
                     className="p-1 rounded-lg hover:bg-red-100 dark:hover:bg-red-900/30"
                     aria-label="Delete note"
                   >
@@ -392,6 +401,107 @@ export default function Notebook() {
           ))}
         </div>
       )}
+
+      {/* Opened note reader */}
+      <AnimatePresence>
+        {openedNote && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+            role="dialog"
+            aria-modal="true"
+            aria-label={openedNote.title}
+            onClick={() => {
+              setOpenedNote(null);
+              setShowFullImage(false);
+            }}
+          >
+            <motion.div
+              initial={{ scale: 0.98, y: 8 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.98, y: 8 }}
+              className={`w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-2xl p-6 shadow-xl ${colorClassMap[openedNote.color] ?? colorClassMap.gold}`}
+              onClick={(event) => event.stopPropagation()}
+            >
+              <div className="flex items-start justify-between gap-4 mb-4">
+                <h2 className="text-xl font-bold">{openedNote.title}</h2>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setOpenedNote(null);
+                    setShowFullImage(false);
+                  }}
+                  className="p-1.5 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700"
+                  aria-label="Close note"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+
+              {openedNote.content && (
+                <p className="text-sm text-slate-600 dark:text-slate-400 whitespace-pre-wrap break-words">
+                  {openedNote.content}
+                </p>
+              )}
+
+              {openedNote.image && (
+                <button
+                  type="button"
+                  onClick={() => setShowFullImage(true)}
+                  className="block mt-4 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  aria-label="Open attached image"
+                >
+                  <img
+                    src={openedNote.image}
+                    alt="Attached to note"
+                    className="h-20 w-20 object-cover rounded-lg"
+                  />
+                </button>
+              )}
+
+              <div className="flex items-center gap-1 mt-4 text-xs text-slate-400">
+                <Calendar className="h-3 w-3" />
+                {formatDate(openedNote.updatedAt)}
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {showFullImage && openedNote?.image && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[60] flex items-center justify-center bg-black p-4"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Full-screen attached image"
+            onClick={() => setShowFullImage(false)}
+          >
+            <button
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation();
+                setShowFullImage(false);
+              }}
+              className="absolute top-4 right-4 p-2 rounded-full text-white hover:bg-white/20"
+              aria-label="Close full-screen image"
+            >
+              <X className="h-6 w-6" />
+            </button>
+            <img
+              src={openedNote.image}
+              alt="Attached to note"
+              className="max-h-[90vh] max-w-[90vw] object-contain rounded-lg"
+              onClick={(event) => event.stopPropagation()}
+            />
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
