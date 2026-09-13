@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { supabase, uploadToCloudinary } from '@/lib/supabase';
 import { useAuth } from '@/context/AuthContext';
@@ -22,20 +23,19 @@ type ProfileData = {
   created_at: string;
 };
 
-function getProfileTarget(): string | null {
-  if (typeof window === 'undefined') return null;
-
-  const params = new URLSearchParams(window.location.search);
+function getProfileTarget(pathname: string, search: string): string | null {
+  const params = new URLSearchParams(search);
   const queryTarget = params.get('profileId') ?? params.get('userId') ?? params.get('username') ?? params.get('user');
   if (queryTarget) return queryTarget;
 
-  const pathParts = window.location.pathname.split('/').filter(Boolean);
+  const pathParts = pathname.split('/').filter(Boolean);
   return pathParts[0] === 'profile' && pathParts[1] ? decodeURIComponent(pathParts[1]) : null;
 }
 
 export default function Profile() {
   const { user, profile, loading, signUp, signIn, signOut, refreshProfile } = useAuth();
-  const viewedProfileKey = getProfileTarget();
+  const location = useLocation();
+  const viewedProfileKey = getProfileTarget(location.pathname, location.search);
   const { showToast } = useToast();
 
   if (loading) {
