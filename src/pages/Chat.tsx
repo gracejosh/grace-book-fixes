@@ -7,7 +7,7 @@ import type { ChatRoom, Message, Profile } from '@/types';
 import {
   MessageCircle, Send, Plus, Users, Hash, Lock, Search, Smile,
   Image as ImageIcon, Reply, Trash2, Edit2, X, ArrowLeft, Check,
-  AlertCircle, Loader, Mic, Square, BookOpen, Library,
+  AlertCircle, Loader, Mic, Square, BookOpen, Library, ChevronDown,
 } from 'lucide-react';
 import { EmptyState } from '@/components/ui';
 
@@ -51,8 +51,13 @@ export default function Chat() {
   const [imagePreview, setImagePreview] = useState<string | null>(null);
 
   const profilesRef = useRef<Record<string, Profile>>({});
+  const scrollRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const isAtBottomRef = useRef(true);
+  const lastMessageCountRef = useRef(0);
+  const lastSenderRef = useRef<string | null>(null);
+  const [showNewMessage, setShowNewMessage] = useState(false);
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
@@ -222,10 +227,58 @@ export default function Chat() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedRoom?.id]);
 
-  // Auto-scroll
+  const scrollToBottom = useCallback((behavior: ScrollBehavior = 'smooth') => {
+    messagesEndRef.current?.scrollIntoView({ behavior });
+  }, []);
+
+  const checkAtBottom = useCallback(() => {
+    const el = scrollRef.current;
+    if (!el) return true;
+    return el.scrollTop + el.clientHeight >= el.scrollHeight - 100;
+  }, []);
+
+  const handleScroll = useCallback(() => {
+    const atBottom = checkAtBottom();
+    isAtBottomRef.current = atBottom;
+    if (atBottom) setShowNewMessage(false);
+  }, [checkAtBottom]);
+
+  // Room change → scroll to bottom instantly
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+    isAtBottomRef.current = true;
+    lastMessageCountRef.current = 0;
+    lastSenderRef.current = null;
+    setShowNewMessage(false);
+    requestAnimationFrame(() => scrollToBottom('auto'));
+  }, [selectedRoom?.id, scrollToBottom]);
+
+  // Smart auto-scroll on new messages
+  useEffect(() => {
+    const count = messages.length;
+    if (count === 0 || count === lastMessageCountRef.current) return;
+
+    const latest = messages[count - 1];
+    const isNew = count > lastMessageCountRef.current;
+    const senderChanged = latest.sender_id !== lastSenderRef.current;
+
+    if (isNew && senderChanged) {
+      if (latest.sender_id === user?.id) {
+        scrollToBottom('smooth');
+        setShowNewMessage(false);
+        isAtBottomRef.current = true;
+      } else {
+        if (isAtBottomRef.current) {
+          scrollToBottom('smooth');
+          setShowNewMessage(false);
+        } else {
+          setShowNewMessage(true);
+        }
+      }
+    }
+
+    lastMessageCountRef.current = count;
+    lastSenderRef.current = latest.sender_id;
+  }, [messages, user?.id, scrollToBottom]);
 
   // Broadcast typing
   const handleTyping = useCallback(() => {
@@ -633,7 +686,7 @@ export default function Chat() {
             </div>
 
             {/* Messages */}
-            <div className="flex-1 overflow-y-auto scrollbar-thin p-4 space-y-3">
+            <div ref={scrollRef} onScroll={handleScroll} className="flex-1 overflow-y-auto scrollbar-thin p-4 space-y-3 relative">
               {loadingMessages ? (
                 <div className="flex items-center justify-center h-full">
                   <div className="text-center">
@@ -735,6 +788,15 @@ export default function Chat() {
                     {typingUsers.map((id) => profiles[id]?.username ?? 'Someone').join(', ')} {typingUsers.length === 1 ? 'is' : 'are'} typing...
                   </span>
                 </div>
+              )}
+              {showNewMessage && (
+                <button
+                  onClick={() => { scrollToBottom('smooth'); setShowNewMessage(false); isAtBottomRef.current = true; }}
+                  className="sticky bottom-4 left-1/2 -translate-x-1/2 z-10 px-4 py-2 bg-primary-600 text-white text-sm font-medium rounded-full shadow-lg flex items-center gap-1.5 hover:bg-primary-700 transition-colors"
+                >
+                  New message
+                  <ChevronDown className="h-4 w-4" />
+                </button>
               )}
               <div ref={messagesEndRef} />
             </div>
