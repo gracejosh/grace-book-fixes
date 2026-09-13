@@ -1,5 +1,6 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useNavigate } from 'react-router-dom';
 import { supabase, uploadToCloudinary } from '@/lib/supabase';
 import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/context/ToastContext';
@@ -18,6 +19,7 @@ const DAILY_MESSAGE_LIMIT = 50;
 export default function Chat() {
   const { user, profile } = useAuth();
   const { showToast } = useToast();
+  const navigate = useNavigate();
   const [rooms, setRooms] = useState<ChatRoom[]>([]);
   const [selectedRoom, setSelectedRoom] = useState<ChatRoom | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -436,6 +438,11 @@ export default function Chat() {
     setSelectedRoom(room);
   };
 
+  const openUserProfile = (personId: string) => {
+    setSelectedUser(null);
+    navigate(`/profile?user=${encodeURIComponent(personId)}`);
+  };
+
   const startDirectChat = async (person: Profile) => {
     if (!user || !person.id || person.id === user.id || openingUserId) return;
 
@@ -570,7 +577,7 @@ export default function Chat() {
                       animate={{ opacity: 1, y: 0 }}
                       exit={{ opacity: 0, y: -4 }}
                       transition={{ duration: 0.15 }}
-                      onClick={() => setSelectedUser(person)}
+                      onClick={() => openUserProfile(person.id)}
                       className="flex w-full items-center gap-3 rounded-lg p-2 text-left transition-colors hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-primary-500 dark:hover:bg-slate-800"
                       aria-label="View user profile"
                     >
@@ -708,14 +715,39 @@ export default function Chat() {
                   return (
                     <motion.div key={msg.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className={`flex gap-2 ${isOwn ? 'flex-row-reverse' : ''}`}>
                       <div className="relative shrink-0">
-                        <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-primary-400 to-gold-400 flex items-center justify-center text-white text-xs font-bold overflow-hidden">
+                        <div
+                          className="w-8 h-8 rounded-lg bg-gradient-to-br from-primary-400 to-gold-400 flex items-center justify-center text-white text-xs font-bold overflow-hidden"
+                          role="button"
+                          tabIndex={sender?.id ? 0 : -1}
+                          aria-label={sender?.username ? `Open ${sender.username}'s profile` : 'Open user profile'}
+                          onClick={() => sender?.id && openUserProfile(sender.id)}
+                          onKeyDown={(event) => {
+                            if (event.key === 'Enter' || event.key === ' ') {
+                              event.preventDefault();
+                              if (sender?.id) openUserProfile(sender.id);
+                            }
+                          }}
+                        >
                           {sender?.avatar_url ? <img src={sender.avatar_url} alt="" className="w-full h-full rounded-lg object-cover" /> : sender?.username?.charAt(0).toUpperCase() ?? '?'}
                         </div>
                         {senderOnline && <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full bg-emerald-500 border-2 border-white dark:border-slate-950" />}
                       </div>
                       <div className={`max-w-[75%] group ${isOwn ? 'items-end' : ''}`}>
                         <div className={`flex items-center gap-2 mb-0.5 ${isOwn ? 'flex-row-reverse' : ''}`}>
-                          <span className="text-xs font-semibold">{isOwn ? 'You' : sender?.username ?? 'Unknown'}</span>
+                          <span
+                            className="text-xs font-semibold"
+                            role="button"
+                            tabIndex={sender?.id ? 0 : -1}
+                            onClick={() => sender?.id && openUserProfile(sender.id)}
+                            onKeyDown={(event) => {
+                              if (event.key === 'Enter' || event.key === ' ') {
+                                event.preventDefault();
+                                if (sender?.id) openUserProfile(sender.id);
+                              }
+                            }}
+                          >
+                            {isOwn ? 'You' : sender?.username ?? 'Unknown'}
+                          </span>
                           <span className="text-xs text-slate-400">{formatTime(msg.created_at)}</span>
                         </div>
                         <div className={`rounded-2xl px-4 py-2 ${isOwn ? 'bg-gradient-to-br from-primary-600 to-primary-700 text-white' : 'bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700'}`}>
