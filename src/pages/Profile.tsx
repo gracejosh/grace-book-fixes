@@ -6,8 +6,36 @@ import { useToast } from '@/context/ToastContext';
 import type { QuizResult, BookDownload, CourseProgress } from '@/types';
 import { User, Mail, Lock, Eye, EyeOff, Camera, Edit2, Save, X, Award, Download, GraduationCap, BrainCircuit, LogOut, KeyRound, Star, Link2, Send, MessageCircle, Music, Phone, Globe } from 'lucide-react';
 
+type ProfileData = {
+  id?: string;
+  username: string | null;
+  full_name: string | null;
+  avatar_url: string | null;
+  bio: string | null;
+  facebook_url: string | null;
+  telegram_url: string | null;
+  whatsapp_number: string | null;
+  tiktok_url: string | null;
+  phone_number: string | null;
+  website_url: string | null;
+  is_admin: boolean;
+  created_at: string;
+};
+
+function getProfileTarget(): string | null {
+  if (typeof window === 'undefined') return null;
+
+  const params = new URLSearchParams(window.location.search);
+  const queryTarget = params.get('profileId') ?? params.get('userId') ?? params.get('username') ?? params.get('user');
+  if (queryTarget) return queryTarget;
+
+  const pathParts = window.location.pathname.split('/').filter(Boolean);
+  return pathParts[0] === 'profile' && pathParts[1] ? decodeURIComponent(pathParts[1]) : null;
+}
+
 export default function Profile() {
   const { user, profile, loading, signUp, signIn, signOut, refreshProfile } = useAuth();
+  const viewedProfileKey = getProfileTarget();
   const { showToast } = useToast();
 
   if (loading) {
@@ -22,7 +50,7 @@ export default function Profile() {
     return <AuthForm onSignUp={signUp} onSignIn={signIn} showToast={showToast} />;
   }
 
-  return <ProfileDashboard user={user} profile={profile} showToast={showToast} signOut={signOut} refreshProfile={refreshProfile} />;
+  return <ProfileDashboard user={user} profile={profile} viewedProfileKey={viewedProfileKey} showToast={showToast} signOut={signOut} refreshProfile={refreshProfile} />;
 }
 
 function AuthForm({ onSignUp, onSignIn, showToast }: {
@@ -138,9 +166,10 @@ function AuthForm({ onSignUp, onSignIn, showToast }: {
   );
 }
 
-function ProfileDashboard({ user, profile, showToast, signOut, refreshProfile }: {
+function ProfileDashboard({ user, profile, viewedProfileKey, showToast, signOut, refreshProfile }: {
   user: { id: string; email?: string };
-  profile: { username: string | null; full_name: string | null; avatar_url: string | null; bio: string | null; facebook_url: string | null; telegram_url: string | null; whatsapp_number: string | null; tiktok_url: string | null; phone_number: string | null; website_url: string | null; is_admin: boolean; created_at: string } | null;
+  profile: ProfileData | null;
+  viewedProfileKey: string | null;
   showToast: (m: string, t?: 'success' | 'error' | 'info' | 'warning') => void;
   signOut: () => Promise<void>;
   refreshProfile: () => Promise<void>;
@@ -160,13 +189,94 @@ function ProfileDashboard({ user, profile, showToast, signOut, refreshProfile }:
   const [recentResults, setRecentResults] = useState<QuizResult[]>([]);
   const [showPasswordChange, setShowPasswordChange] = useState(false);
   const [newPassword, setNewPassword] = useState('');
+  const isTargetedProfile = Boolean(viewedProfileKey && viewedProfileKey !== user.id);
+  const [viewedProfile, setViewedProfile] = useState<ProfileData | null>(isTargetedProfile ? null : profile);
+  const [viewedUserId, setViewedUserId] = useState(isTargetedProfile ? '' : user.id);
+  const [isFollowing, setIsFollowing] = useState(false);
+  const [followLoading, setFollowLoading] = useState(false);
+  const [followCounts, setFollowCounts] = useState({ followers: 0, following: 0 });
+  const isOwnProfile = viewedUserId === user.id;
+
+  useEffect(() => {
+    let active = true;
+
+    const loadViewedProfile = async () => {
+      if (!viewedProfileKey || viewedProfileKey === user.id) {
+        if (active) {
+          setViewedProfile(profile);
+          setViewedUserId(user.id);
+        }
+        return;
+      }
+
+      let { data } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', viewedProfileKey)
+        .maybeSingle();
+
+      if (!data) {
+        ({ data } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('username', viewedProfileKey)
+          .maybeSingle());
+      }
+
+      if (active) {
+        setViewedProfile((data as ProfileData | null) ?? null);
+        setViewedUserId((data as ProfileData | null)?.id ?? viewedProfileKey);
+      }
+    };
+
+    void loadViewedProfile();
+    return () => {
+      active = false;
+    };
+  }, [profile, user.id, viewedProfileKey]);
+
+  useEffect(() => {
+    if (!viewedUserId) return;
+    let active = true;
+
+    const loadFollowData = async () => {
+      const [followersResult, followingResult] = await Promise.all([
+        supabase.from('follows').select('*', { count: 'exact', head: true }).eq('following_id', viewedUserId),
+        supabase.from('follows').select('*', { count: 'exact', head: true }).eq('follower_id', viewedUserId),
+      ]);
+
+      let following = false;
+      if (viewedUserId !== user.id) {
+        const { data } = await supabase
+          .from('follows')
+          .select('follower_id')
+          .eq('follower_id', user.id)
+          .eq('following_id', viewedUserId)
+          .maybeSingle();
+        following = Boolean(data);
+      }
+
+      if (active) {
+        setFollowCounts({
+          followers: followersResult.count ?? 0,
+          following: followingResult.count ?? 0,
+        });
+        setIsFollowing(following);
+      }
+    };
+
+    void loadFollowData();
+    return () => {
+      active = false;
+    };
+  }, [user.id, viewedUserId]);
 
   useEffect(() => {
     (async () => {
       const [quizRes, bookDl, courseProg] = await Promise.all([
-        supabase.from('quiz_results').select('*').eq('user_id', user.id).order('created_at', { ascending: false }),
-        supabase.from('book_downloads').select('id').eq('user_id', user.id),
-        supabase.from('course_progress').select('*').eq('user_id', user.id).eq('is_completed', true),
+        supabase.from('quiz_results').select('*').eq('user_id', viewedUserId || user.id).order('created_at', { ascending: false }),
+        supabase.from('book_downloads').select('id').eq('user_id', viewedUserId || user.id),
+        supabase.from('course_progress').select('*').eq('user_id', viewedUserId || user.id).eq('is_completed', true),
       ]);
       const results = (quizRes.data ?? []) as QuizResult[];
       setRecentResults(results.slice(0, 5));
@@ -177,7 +287,27 @@ function ProfileDashboard({ user, profile, showToast, signOut, refreshProfile }:
         bestScore: results.reduce((max, r) => Math.max(max, r.score), 0),
       });
     })();
-  }, [user.id]);
+  }, [user.id, viewedUserId]);
+
+  const toggleFollow = async () => {
+    if (isOwnProfile || !viewedUserId || followLoading) return;
+
+    setFollowLoading(true);
+    const result = isFollowing
+      ? await supabase.from('follows').delete().eq('follower_id', user.id).eq('following_id', viewedUserId)
+      : await supabase.from('follows').insert({ follower_id: user.id, following_id: viewedUserId });
+
+    if (result.error) {
+      showToast(isFollowing ? 'Could not unfollow user' : 'Could not follow user', 'error');
+    } else {
+      setIsFollowing(!isFollowing);
+      setFollowCounts((current) => ({
+        ...current,
+        followers: Math.max(0, current.followers + (isFollowing ? -1 : 1)),
+      }));
+    }
+    setFollowLoading(false);
+  };
 
   const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -246,16 +376,18 @@ function ProfileDashboard({ user, profile, showToast, signOut, refreshProfile }:
           <div className="flex flex-col sm:flex-row items-center sm:items-start gap-6">
             <div className="relative">
               <div className="w-24 h-24 rounded-2xl bg-gradient-to-br from-primary-500 to-gold-500 flex items-center justify-center overflow-hidden">
-                {profile?.avatar_url ? (
-                  <img src={profile.avatar_url} alt="" className="w-full h-full object-cover" />
+                {viewedProfile?.avatar_url ? (
+                  <img src={viewedProfile.avatar_url} alt="" className="w-full h-full object-cover" />
                 ) : (
                   <User className="h-10 w-10 text-white" />
                 )}
               </div>
-              <label className="absolute -bottom-2 -right-2 w-8 h-8 rounded-xl bg-primary-600 text-white flex items-center justify-center cursor-pointer hover:scale-110 transition-transform shadow-lg">
+              {isOwnProfile && (
+                <label className="absolute -bottom-2 -right-2 w-8 h-8 rounded-xl bg-primary-600 text-white flex items-center justify-center cursor-pointer hover:scale-110 transition-transform shadow-lg">
                 <Camera className="h-4 w-4" />
-                <input type="file" accept="image/*" onChange={handleAvatarUpload} className="hidden" />
-              </label>
+                  <input type="file" accept="image/*" onChange={handleAvatarUpload} className="hidden" />
+                </label>
+              )}
               {uploading && <div className="absolute inset-0 rounded-2xl bg-black/50 flex items-center justify-center"><div className="skeleton h-8 w-8 rounded-full" /></div>}
             </div>
 
@@ -319,20 +451,32 @@ function ProfileDashboard({ user, profile, showToast, signOut, refreshProfile }:
                 </div>              ) : (
                 <>
                   <div className="flex items-center justify-center sm:justify-start gap-2 mb-1">
-                    <h1 className="text-2xl font-bold">{profile?.username ?? 'User'}</h1>
-                    {profile?.is_admin && (
+                    <h1 className="text-2xl font-bold">{viewedProfile?.username ?? 'User'}</h1>
+                    {viewedProfile?.is_admin && (
                       <span className="px-2 py-0.5 rounded-lg bg-gradient-to-r from-gold-400 to-gold-600 text-white text-xs font-bold flex items-center gap-1">
                         <Star className="h-3 w-3 fill-white" /> Admin
                       </span>
                     )}
                   </div>
-                  <p className="text-slate-500 dark:text-slate-400 text-sm mb-2">{profile?.full_name || user.email}</p>
-                  {profile?.bio && <p className="text-sm text-slate-600 dark:text-slate-300 mb-3 max-w-md">{profile.bio}</p>}
-                  <p className="text-xs text-slate-400">Member since {new Date(profile?.created_at ?? Date.now()).toLocaleDateString()}</p>
+                  <p className="text-slate-500 dark:text-slate-400 text-sm mb-2">{viewedProfile?.full_name || (isOwnProfile ? user.email : '')}</p>
+                  {viewedProfile?.bio && <p className="text-sm text-slate-600 dark:text-slate-300 mb-3 max-w-md">{viewedProfile.bio}</p>}
+                  <p className="text-xs text-slate-400">Member since {new Date(viewedProfile?.created_at ?? Date.now()).toLocaleDateString()}</p>
+                  <div className="flex gap-4 mt-3 text-sm text-slate-500 dark:text-slate-400">
+                    <span><strong className="text-slate-700 dark:text-slate-200">{followCounts.followers}</strong> Followers</span>
+                    <span><strong className="text-slate-700 dark:text-slate-200">{followCounts.following}</strong> Following</span>
+                  </div>
                   <div className="flex gap-2 mt-4 justify-center sm:justify-start">
-                    <button onClick={() => setEditing(true)} className="btn-ghost py-2"><Edit2 className="h-4 w-4" /> Edit Profile</button>
-                    <button onClick={() => setShowPasswordChange(!showPasswordChange)} className="btn-ghost py-2"><KeyRound className="h-4 w-4" /> Password</button>
-                    <button onClick={signOut} className="btn-ghost py-2 text-red-600 dark:text-red-400"><LogOut className="h-4 w-4" /> Logout</button>
+                    {isOwnProfile ? (
+                      <>
+                        <button onClick={() => setEditing(true)} className="btn-ghost py-2"><Edit2 className="h-4 w-4" /> Edit Profile</button>
+                        <button onClick={() => setShowPasswordChange(!showPasswordChange)} className="btn-ghost py-2"><KeyRound className="h-4 w-4" /> Password</button>
+                        <button onClick={signOut} className="btn-ghost py-2 text-red-600 dark:text-red-400"><LogOut className="h-4 w-4" /> Logout</button>
+                      </>
+                    ) : (
+                      <button onClick={toggleFollow} disabled={followLoading} className={isFollowing ? 'btn-ghost py-2' : 'btn-primary py-2'}>
+                        {isFollowing ? 'Following' : 'Follow'}
+                      </button>
+                    )}
                   </div>
                 </>
               )}
