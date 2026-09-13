@@ -2,6 +2,7 @@ import { useEffect, useState, useRef, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useToast } from '@/context/ToastContext';
 import { EmptyState } from '@/components/ui';
+import { saveNote, getNotes, deleteNote } from '@/lib/db';
 import {
   Notebook as NotebookIcon, Plus, Trash2, X, Pencil,
   Image as ImageIcon, Calendar, Palette, Check, Search,
@@ -17,8 +18,6 @@ interface Note {
   updatedAt: string;
 }
 
-const STORAGE_KEY = 'grace-notebook-notes';
-
 const COLORS = [
   { name: 'Gold',    value: 'gold',    class: 'bg-gold-50 dark:bg-gold-900/20',    dot: 'bg-gold-400' },
   { name: 'Purple',  value: 'purple',  class: 'bg-primary-50 dark:bg-primary-900/20', dot: 'bg-primary-400' },
@@ -29,20 +28,43 @@ const COLORS = [
 
 const colorClassMap = Object.fromEntries(COLORS.map((c) => [c.value, c.class]));
 
-function loadNotes(): Note[] {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return [];
-    return parsed;
-  } catch {
-    return [];
-  }
+type DbNote = Parameters<typeof saveNote>[0];
+
+function toDbNote(note: Note): DbNote {
+  return {
+    id: note.id,
+    title: note.title,
+    content: note.content,
+    color: note.color,
+    createdAt: note.createdAt,
+    updatedAt: note.updatedAt,
+    imageUrl: note.image,
+  } as unknown as DbNote;
 }
 
-function saveNotes(notes: Note[]) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(notes));
+function fromDbNote(record: Record<string, unknown>): Note | null {
+  if (typeof record.id !== 'string') return null;
+
+  const image = typeof record.imageUrl === 'string'
+    ? record.imageUrl
+    : typeof record.image === 'string'
+      ? record.image
+      : null;
+  const dateValue = (value: unknown) => {
+    if (typeof value === 'string' && !Number.isNaN(new Date(value).getTime())) return value;
+    if (typeof value === 'number') return new Date(value).toISOString();
+    return new Date().toISOString();
+  };
+
+  return {
+    id: record.id,
+    title: typeof record.title === 'string' ? record.title : '',
+    content: typeof record.content === 'string' ? record.content : '',
+    color: typeof record.color === 'string' ? record.color : 'gold',
+    image,
+    createdAt: dateValue(record.createdAt),
+    updatedAt: dateValue(record.updatedAt ?? record.createdAt),
+  };
 }
 
 function formatDate(iso: string): string {
@@ -71,13 +93,26 @@ export default function Notebook() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    setNotes(loadNotes());
-  }, []);
+    let active = true;
 
-  const persist = (updated: Note[]) => {
-    setNotes(updated);
-    saveNotes(updated);
-  };
+    const load = async () => {
+      try {
+        const stored = await getNotes();
+        const loaded = stored
+          .map((record) => fromDbNote(record))
+          .filter((note): note is Note => note !== null)
+          .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+        if (active) setNotes(loaded);
+      } catch {
+        if (active) showToast('Could not load notes', 'error');
+      }
+    };
+
+    void load();
+    return () => {
+      active = false;
+    };
+  }, [showToast]);
 
   const filteredNotes = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -125,50 +160,61 @@ export default function Notebook() {
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
-  const save = () => {
+  const save = async () => {
     if (!form.title.trim()) {
       showToast('Please enter a title', 'error');
       return;
     }
-    const now = new Date().toISOString();
 
-    if (editingId) {
-      const updated = notes.map((n) =>
-        n.id === editingId
-          ? {
-              ...n,
-              title: form.title.trim(),
-              content: form.content.trim(),
-              color: form.color,
-              image: form.image,
-              updatedAt: now,
-            }
-          : n,
-      );
-      persist(updated);
-      showToast('Note updated', 'success');
-    } else {
-      const note: Note = {
-        id: crypto.randomUUID(),
-        title: form.title.trim(),
-        content: form.content.trim(),
-        color: form.color,
-        image: form.image,
-        createdAt: now,
-        updatedAt: now,
-      };
-      persist([note, ...notes]);
-      showToast('Note saved', 'success');
+    const now = new Date().toISOString();
+    const note: Note = editingId
+      ? {
+          ...(notes.find((n) => n.id === editingId) as Note),
+          title: form.title.trim(),
+          content: form.content.trim(),
+          color: form.color,
+          image: form.image,
+          updatedAt: now,
+        }
+      : {
+          id: crypto.randomUUID(),
+          title: form.title.trim(),
+          content: form.content.trim(),
+          color: form.color,
+          image: form.image,
+          createdAt: now,
+          updatedAt: now,
+        };
+
+    if (editingId && !notes.some((n) => n.id === editingId)) {
+      showToast('Note not found', 'error');
+      return;
     }
 
-    setForm({ title: '', content: '', color: 'gold', image: null });
-    setShowForm(false);
-    setEditingId(null);
+    try {
+      const saved = await saveNote(toDbNote(note));
+      if (!saved) throw new Error('IndexedDB did not save the note.');
+
+      setNotes((current) => editingId
+        ? current.map((existing) => existing.id === editingId ? note : existing)
+        : [note, ...current]);
+      showToast(editingId ? 'Note updated' : 'Note saved', 'success');
+      setForm({ title: '', content: '', color: 'gold', image: null });
+      setShowForm(false);
+      setEditingId(null);
+    } catch {
+      showToast('Could not save note', 'error');
+    }
   };
 
-  const del = (id: string) => {
-    persist(notes.filter((n) => n.id !== id));
-    showToast('Note deleted', 'info');
+  const del = async (id: string) => {
+    try {
+      await deleteNote(id);
+      setNotes((current) => current.filter((note) => note.id !== id));
+      showToast('Note deleted', 'info');
+    } catch {
+      showToast('Could not delete note', 'error');
+    }
   };
 
   return (
