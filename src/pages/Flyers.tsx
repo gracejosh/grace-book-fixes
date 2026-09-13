@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useNavigate } from 'react-router-dom';
 import { supabase, uploadToCloudinary } from '@/lib/supabase';
 import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/context/ToastContext';
@@ -303,6 +304,10 @@ function FlyerCard({
   canDelete: boolean;
   index: number;
 }) {
+  const navigate = useNavigate();
+  const openAuthorProfile = () => {
+    if (author?.id) navigate(`/profile?user=${encodeURIComponent(author.id)}`);
+  };
   const [currentImage, setCurrentImage] = useState(0);
   const images = flyer.images?.length ? flyer.images : [];
   const touchStartX = useRef<number | null>(null);
@@ -413,14 +418,14 @@ function FlyerCard({
         {/* Author */}
         {author && (
           <div className="flex items-center gap-2 mb-3">
-            <div className="w-6 h-6 rounded-lg bg-gradient-to-br from-primary-400 to-gold-400 flex items-center justify-center text-white text-xs font-bold overflow-hidden">
+            <div onClick={openAuthorProfile} className="w-6 h-6 rounded-lg bg-gradient-to-br from-primary-400 to-gold-400 flex items-center justify-center text-white text-xs font-bold overflow-hidden">
               {author?.avatar_url ? (
                 <img src={author.avatar_url} alt="" className="w-full h-full object-cover" />
               ) : (
                 author?.username?.charAt(0).toUpperCase() || '?'
               )}
             </div>
-            <p className="text-xs font-medium truncate">{author?.username || 'Unknown'}</p>
+            <p onClick={openAuthorProfile} className="text-xs font-medium truncate">{author?.username || 'Unknown'}</p>
             <p className="text-xs text-slate-400 ml-auto">{timeAgo(flyer.created_at)}</p>
           </div>
         )}
