@@ -232,7 +232,7 @@ async function staleWhileRevalidate(request, cacheName) {
       if (isCacheable(response)) cache.put(request, response.clone());
       return response;
     })
-    .catch(() => cached);
+    .catch(() => cached || offlineResponse());
   return cached || update;
 }
 
