@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
+import { useNavigate } from 'react-router-dom';
 import { Newspaper, Heart, Search } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/context/AuthContext';
@@ -14,6 +15,10 @@ export default function Blogs() {
   const [search, setSearch] = useState('');
   const { user } = useAuth();
   const { showToast } = useToast();
+  const navigate = useNavigate();
+  const openAuthorProfile = (authorId?: string) => {
+    if (authorId) navigate(`/profile?user=${encodeURIComponent(authorId)}`);
+  };
 
   const load = async () => {
     const { data } = await supabase.from('blogs').select('*').order('created_at', { ascending: false });
@@ -90,13 +95,13 @@ export default function Blogs() {
                 <div className="p-4">
                   <div className="flex items-center gap-2 mb-2">
                     {author?.avatar_url ? (
-                      <img src={author.avatar_url} alt="" className="w-6 h-6 rounded-full object-cover" />
+                      <img onClick={() => openAuthorProfile(author?.id)} src={author.avatar_url} alt="" className="w-6 h-6 rounded-full object-cover" />
                     ) : (
-                      <div className="w-6 h-6 rounded-full bg-gradient-to-br from-primary-400 to-gold-400 flex items-center justify-center text-white text-xs font-bold">
+                      <div onClick={() => openAuthorProfile(author?.id)} className="w-6 h-6 rounded-full bg-gradient-to-br from-primary-400 to-gold-400 flex items-center justify-center text-white text-xs font-bold">
                         {author?.username?.charAt(0).toUpperCase() ?? '?'}
                       </div>
                     )}
-                    <span className="text-xs font-medium">{author?.username ?? 'Unknown'}</span>
+                    <span onClick={() => openAuthorProfile(author?.id)} className="text-xs font-medium">{author?.username ?? 'Unknown'}</span>
                     <span className="text-xs text-slate-400">{new Date(b.created_at).toLocaleDateString()}</span>
                   </div>
                   <h2 className="font-bold text-lg mb-1">{b.title ?? 'Untitled'}</h2>
