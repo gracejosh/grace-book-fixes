@@ -87,7 +87,7 @@ export default async function handler(req, res) {
   const requestedFilename = getQueryValue(req.query.filename);
   const sourceFilename = decodeURIComponent(parsedSource.pathname.split('/').pop() || 'book');
   const filename = getSafeFilename(requestedFilename, sourceFilename);
-  const downloadUrl = getCloudinaryDownloadUrl(parsedSource);
+  const downloadUrl = parsedSource;
 
   try {
     const response = await fetch(downloadUrl, {
