@@ -143,7 +143,8 @@ export default function Posts() {
   const downloadBlob = useCallback(async (url: string, filename: string, progressKey: string) => {
     setDownloadProgress((prev) => ({ ...prev, [progressKey]: 0 }));
     try {
-      const response = await fetch(url, { mode: 'cors' });
+      const proxyUrl = `/api/download?url=${encodeURIComponent(url)}`;
+      const response = await fetch(proxyUrl);
       if (!response.ok) throw new Error('Download failed');
       const contentLength = response.headers.get('Content-Length');
       const total = contentLength ? parseInt(contentLength, 10) : 0;
@@ -183,33 +184,12 @@ export default function Posts() {
         });
       }, 3000);
     } catch {
-      // Fallback: try direct download with anchor element (works when CORS blocks fetch)
-      try {
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = filename;
-        a.target = '_blank';
-        a.rel = 'noopener noreferrer';
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        setDownloadProgress((prev) => ({ ...prev, [progressKey]: 'done' }));
-        showToast('Download started', 'success');
-        setTimeout(() => {
-          setDownloadProgress((prev) => {
-            const next = { ...prev };
-            delete next[progressKey];
-            return next;
-          });
-        }, 3000);
-      } catch {
-        setDownloadProgress((prev) => {
-          const next = { ...prev };
-          delete next[progressKey];
-          return next;
-        });
-        showToast('Download failed. Please try again.', 'error');
-      }
+      setDownloadProgress((prev) => {
+        const next = { ...prev };
+        delete next[progressKey];
+        return next;
+      });
+      showToast('Download failed. Please try again.', 'error');
     }
   }, [showToast]);
 
@@ -379,7 +359,7 @@ export default function Posts() {
                     className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-medium transition-all duration-200 ${
                       filter === f.key
                         ? 'bg-gradient-to-r from-primary-600 to-primary-700 text-white shadow-lg shadow-primary-600/25'
-                        : 'glasstext-slate-600 dark:text-slate-300 hover:scale-105'
+                        : 'glass text-slate-600 dark:text-slate-300 hover:scale-105'
                     }`}
                   >
                     <Icon className="h-4 w-4" /> {f.label}
@@ -769,7 +749,7 @@ function UploadModal({ onClose, onUploaded, showToast }: {
       <motion.div
         initial={{ scale: 0.9, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
-        exit={{ scale: 0.9, opacity: 0 }}
+      exit={{ scale: 0.9, opacity: 0 }}
         onClick={(e) => e.stopPropagation()}
         className="glass-card p-6 max-w-lg w-full max-h-[90vh] overflow-y-auto scrollbar-thin"
       >
