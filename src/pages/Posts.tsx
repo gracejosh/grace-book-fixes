@@ -143,7 +143,7 @@ export default function Posts() {
   const downloadBlob = useCallback(async (url: string, filename: string, progressKey: string) => {
     setDownloadProgress((prev) => ({ ...prev, [progressKey]: 0 }));
     try {
-      const response = await fetch(url);
+      const response = await fetch(url, { mode: 'cors' });
       if (!response.ok) throw new Error('Download failed');
       const contentLength = response.headers.get('Content-Length');
       const total = contentLength ? parseInt(contentLength, 10) : 0;
@@ -159,6 +159,8 @@ export default function Posts() {
           received += value.length;
           if (total > 0) {
             setDownloadProgress((prev) => ({ ...prev, [progressKey]: Math.round((received / total) * 100) }));
+          } else {
+            setDownloadProgress((prev) => ({ ...prev, [progressKey]: Math.min(95, Math.round((received / (1024 * 1024)) * 5) + 5) }));
           }
         }
       }
@@ -172,6 +174,7 @@ export default function Posts() {
       document.body.removeChild(a);
       URL.revokeObjectURL(blobUrl);
       setDownloadProgress((prev) => ({ ...prev, [progressKey]: 'done' }));
+      showToast('Downloaded successfully', 'success');
       setTimeout(() => {
         setDownloadProgress((prev) => {
           const next = { ...prev };
@@ -180,19 +183,40 @@ export default function Posts() {
         });
       }, 3000);
     } catch {
-      setDownloadProgress((prev) => {
-        const next = { ...prev };
-        delete next[progressKey];
-        return next;
-      });
-      showToast('Download failed', 'error');
+      // Fallback: try direct download with anchor element (works when CORS blocks fetch)
+      try {
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        a.target = '_blank';
+        a.rel = 'noopener noreferrer';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        setDownloadProgress((prev) => ({ ...prev, [progressKey]: 'done' }));
+        showToast('Download started', 'success');
+        setTimeout(() => {
+          setDownloadProgress((prev) => {
+            const next = { ...prev };
+            delete next[progressKey];
+            return next;
+          });
+        }, 3000);
+      } catch {
+        setDownloadProgress((prev) => {
+          const next = { ...prev };
+          delete next[progressKey];
+          return next;
+        });
+        showToast('Download failed. Please try again.', 'error');
+      }
     }
   }, [showToast]);
 
-  const handleDownload = useCallback(async (post: Post) => {
+  const handleDownload = useCallback((post: Post) => {
     if (!post.media_url) return;
     if (user) {
-      await supabase.from('post_downloads').insert({ post_id: post.id, user_id: user.id });
+      supabase.from('post_downloads').insert({ post_id: post.id, user_id: user.id }).then();
     }
     setPosts((prev) => prev.map((p) =>
       p.id === post.id ? { ...p, downloads_count: p.downloads_count + 1 } : p
@@ -355,7 +379,7 @@ export default function Posts() {
                     className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-medium transition-all duration-200 ${
                       filter === f.key
                         ? 'bg-gradient-to-r from-primary-600 to-primary-700 text-white shadow-lg shadow-primary-600/25'
-                        : 'glass text-slate-600 dark:text-slate-300 hover:scale-105'
+                        : 'glasstext-slate-600 dark:text-slate-300 hover:scale-105'
                     }`}
                   >
                     <Icon className="h-4 w-4" /> {f.label}
