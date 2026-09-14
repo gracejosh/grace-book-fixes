@@ -357,7 +357,7 @@ function CoursesTab({ showToast }: { showToast: (m: string, t?: 'success' | 'err
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<Course | null>(null);
-  const [form, setForm] = useState({ title: '', description: '', youtube_video_id: '', thumbnail_url: '', duration: '', instructor: '', category: 'Bible Study' });
+  const [form, setForm] = useState({ title: '', description: '', youtube_url: '', thumbnail_url: '', duration: '', instructor: '', category: 'Bible Study' });
 
   const load = async () => {
     const { data } = await supabase.from('courses').select('*').order('created_at', { ascending: false });
@@ -374,7 +374,7 @@ function CoursesTab({ showToast }: { showToast: (m: string, t?: 'success' | 'err
     }
     showToast(editing ? 'Course updated' : 'Course added', 'success');
     setShowForm(false); setEditing(null);
-    setForm({ title: '', description: '', youtube_video_id: '', thumbnail_url: '', duration: '', instructor: '', category: 'Bible Study' });
+    setForm({ title: '', description: '', youtube_url: '', thumbnail_url: '', duration: '', instructor: '', category: 'Bible Study' });
     load();
   };
 
@@ -387,7 +387,7 @@ function CoursesTab({ showToast }: { showToast: (m: string, t?: 'success' | 'err
 
   return (
     <div>
-      <CrudHeader title="Courses" onAdd={() => { setEditing(null); setForm({ title: '', description: '', youtube_video_id: '', thumbnail_url: '', duration: '', instructor: '', category: 'Bible Study' }); setShowForm(true); }} />
+      <CrudHeader title="Courses" onAdd={() => { setEditing(null); setForm({ title: '', description: '', youtube_url: '', thumbnail_url: '', duration: '', instructor: '', category: 'Bible Study' }); setShowForm(true); }} />
       {loading ? <div className="skeleton h-64 rounded-xl" /> : (
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {items.map((c) => (
@@ -395,7 +395,7 @@ function CoursesTab({ showToast }: { showToast: (m: string, t?: 'success' | 'err
               <div className="flex items-start justify-between gap-2 mb-2">
                 <h3 className="font-bold text-sm">{c.title}</h3>
                 <div className="flex gap-1">
-                  <button onClick={() => { setEditing(c); setForm({ title: c.title, description: c.description ?? '', youtube_video_id: c.youtube_video_id, thumbnail_url: c.thumbnail_url ?? '', duration: c.duration ?? '', instructor: c.instructor ?? '', category: c.category }); setShowForm(true); }} className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700"><Edit2 className="h-3.5 w-3.5 text-slate-400" /></button>
+                  <button onClick={() => { const course = c as Course & { youtube_url?: string | null; youtube_video_id?: string | null }; const youtubeUrl = course.youtube_url || (course.youtube_video_id ? (course.youtube_video_id.startsWith('http') ? course.youtube_video_id : 'https://www.youtube.com/watch?v=' + course.youtube_video_id) : ''); setEditing(c); setForm({ title: c.title, description: c.description ?? '', youtube_url: youtubeUrl, thumbnail_url: c.thumbnail_url ?? '', duration: c.duration ?? '', instructor: c.instructor ?? '', category: c.category }); setShowForm(true); }} className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700"><Edit2 className="h-3.5 w-3.5 text-slate-400" /></button>
                   <button onClick={() => del(c.id)} className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700"><Trash2 className="h-3.5 w-3.5 text-red-400" /></button>
                 </div>
               </div>
@@ -407,7 +407,10 @@ function CoursesTab({ showToast }: { showToast: (m: string, t?: 'success' | 'err
       <FormModal show={showForm} onClose={() => setShowForm(false)} title={editing ? 'Edit Course' : 'Add Course'} onSave={save}>
         <input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} placeholder="Title" className="input-field" />
         <textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} placeholder="Description" className="input-field min-h-[60px]" />
-        <input value={form.youtube_video_id} onChange={(e) => setForm({ ...form, youtube_video_id: e.target.value })} placeholder="YouTube Video ID" className="input-field" />
+        <div>
+          <input value={form.youtube_url} onChange={(e) => setForm({ ...form, youtube_url: e.target.value })} placeholder="YouTube URL (e.g. https://www.youtube.com/watch?v=...)" className="input-field" type="url" />
+          <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">Paste the full YouTube link. It will be embedded automatically on the public course page.</p>
+        </div>
         <input value={form.thumbnail_url} onChange={(e) => setForm({ ...form, thumbnail_url: e.target.value })} placeholder="Thumbnail URL" className="input-field" />
         <input value={form.duration} onChange={(e) => setForm({ ...form, duration: e.target.value })} placeholder="Duration (e.g. 30 min)" className="input-field" />
         <input value={form.instructor} onChange={(e) => setForm({ ...form, instructor: e.target.value })} placeholder="Instructor name" className="input-field" />
