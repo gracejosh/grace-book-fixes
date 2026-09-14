@@ -35,7 +35,7 @@ function getCloudinaryDownloadUrl(sourceUrl) {
   const secret = process.env.CLOUDINARY_API_SECRET;
   const signature = secret
     ? crypto.createHash('sha1')
-        .update(transformations.join('/') + '/' + publicPath + secret)
+        .update(transformations.join('/') + '/' + version + '/' + publicPath + secret)
         .digest('base64')
         .replace(/\+/g, '-')
         .replace(/\//g, '_')
