@@ -288,41 +288,95 @@ function FormModal({ show, onClose, title, onSave, children }: {
 /* ==================== Books Tab ==================== */
 
 function BooksTab({ showToast }: { showToast: (m: string, t?: 'success' | 'error' | 'info' | 'warning') => void }) {
+  const emptyForm = () => ({ title: '', author: '', description: '', cloudinary_url: '', cover_url: '', category: 'General', file_format: 'PDF' });
   const [items, setItems] = useState<Book[]>([]);
   const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<Book | null>(null);
-  const [form, setForm] = useState({ title: '', author: '', description: '', cloudinary_url: '', cover_url: '', category: 'General', file_format: 'PDF' });
+  const [form, setForm] = useState(emptyForm);
 
   const load = async () => {
-    const { data } = await supabase.from('books').select('*').order('created_at', { ascending: false });
-    setItems((data as Book[]) ?? []);
+    const { data, error } = await supabase.from('books').select('*').order('created_at', { ascending: false });
+    if (error) {
+      showToast('Could not load books: ' + error.message, 'error');
+    } else {
+      setItems((data as Book[]) ?? []);
+    }
     setLoading(false);
   };
   useEffect(() => { load(); }, []);
 
   const save = async () => {
-    if (editing) {
-      await supabase.from('books').update(form).eq('id', editing.id);
-    } else {
-      await supabase.from('books').insert(form);
+    if (saving) return;
+
+    const title = form.title.trim();
+    const author = form.author.trim();
+    const bookUrl = form.cloudinary_url.trim();
+
+    if (!title) {
+      showToast('Please add a book title', 'warning');
+      return;
     }
-    showToast(editing ? 'Book updated' : 'Book added', 'success');
-    setShowForm(false); setEditing(null);
-    setForm({ title: '', author: '', description: '', cloudinary_url: '', cover_url: '', category: 'General', file_format: 'PDF' });
-    load();
+    if (!author) {
+      showToast('Please add the book author', 'warning');
+      return;
+    }
+    if (!bookUrl) {
+      showToast('Upload the book file before saving', 'warning');
+      return;
+    }
+
+    const payload = {
+      title,
+      author,
+      description: form.description.trim(),
+      cloudinary_url: bookUrl,
+      cover_url: form.cover_url.trim(),
+      category: form.category,
+      file_format: form.file_format.toUpperCase(),
+    };
+
+    setSaving(true);
+    try {
+      const result = editing
+        ? await supabase.from('books').update(payload).eq('id', editing.id)
+        : await supabase.from('books').insert({ ...payload, price_type: 'free' });
+
+      if (result.error) throw result.error;
+
+      showToast(editing ? 'Book updated and connected to the Books page' : 'Book added to the Books page', 'success');
+      setShowForm(false);
+      setEditing(null);
+      setForm(emptyForm());
+      await load();
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : 'Could not save book', 'error');
+    } finally {
+      setSaving(false);
+    }
   };
 
   const del = async (id: string) => {
     if (!confirm('Delete this book?')) return;
-    await supabase.from('books').delete().eq('id', id);
+    const { error } = await supabase.from('books').delete().eq('id', id);
+    if (error) {
+      showToast('Could not delete book: ' + error.message, 'error');
+      return;
+    }
     showToast('Book deleted', 'info');
     load();
   };
 
+  const openAddForm = () => {
+    setEditing(null);
+    setForm(emptyForm());
+    setShowForm(true);
+  };
+
   return (
     <div>
-      <CrudHeader title="Books" onAdd={() => { setEditing(null); setForm({ title: '', author: '', description: '', cloudinary_url: '', cover_url: '', category: 'General', file_format: 'PDF' }); setShowForm(true); }} />
+      <CrudHeader title="Books" onAdd={openAddForm} />
       {loading ? <div className="skeleton h-64 rounded-xl" /> : (
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {items.map((b) => (
@@ -340,18 +394,17 @@ function BooksTab({ showToast }: { showToast: (m: string, t?: 'success' | 'error
           ))}
         </div>
       )}
-      <FormModal show={showForm} onClose={() => setShowForm(false)} title={editing ? 'Edit Book' : 'Add Book'} onSave={save}>
-        <input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} placeholder="Title" className="input-field" />
-        <input value={form.author} onChange={(e) => setForm({ ...form, author: e.target.value })} placeholder="Author" className="input-field" />
+      <FormModal show={showForm} onClose={() => !saving && setShowForm(false)} title={editing ? 'Edit Book' : 'Add Book'} onSave={save}>
+        <input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} placeholder="Title" className="input-field" disabled={saving} />
+        <input value={form.author} onChange={(e) => setForm({ ...form, author: e.target.value })} placeholder="Author" className="input-field" disabled={saving} />
         <div>
-          <label className="mb-1 block text-sm font-medium">Course text / description</label>
-          <textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} placeholder="Write the course description or full text lesson" className="input-field min-h-[140px]" />
-          <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">For a text-based course, leave the YouTube URL empty and write the lesson content here.</p>
+          <label className="mb-1 block text-sm font-medium">Book description</label>
+          <textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} placeholder="Write a short description" className="input-field min-h-[140px]" disabled={saving} />
         </div>
-        <select value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} className="input-field">
+        <select value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} className="input-field" disabled={saving}>
           {['Theology', 'Classic', 'Spiritual Growth', 'Devotional', 'Apologetics', 'General'].map((c) => <option key={c}>{c}</option>)}
         </select>
-        <select value={form.file_format} onChange={(e) => setForm({ ...form, file_format: e.target.value })} className="input-field">
+        <select value={form.file_format} onChange={(e) => setForm({ ...form, file_format: e.target.value })} className="input-field" disabled={saving}>
           {['PDF', 'EPUB', 'MOBI', 'AZW'].map((c) => <option key={c}>{c}</option>)}
         </select>
         <label className="text-sm font-medium">Cover Image</label>
@@ -363,14 +416,16 @@ function BooksTab({ showToast }: { showToast: (m: string, t?: 'success' | 'error
           onUploaded={(url) => setForm((prev) => ({ ...prev, cover_url: url }))}
         />
         {form.cover_url && <img src={form.cover_url} alt="Cover preview" className="rounded-xl max-h-32 object-cover" />}
-        <label className="text-sm font-medium">Book File (PDF / EPUB)</label>
+        <label className="text-sm font-medium">Book File (PDF / EPUB / MOBI / AZW)</label>
         <UploadButton
           label="Upload Book File"
-          accept=".pdf,.epub"
+          accept=".pdf,.epub,.mobi,.azw,application/pdf,application/epub+zip,application/octet-stream"
           resourceType="raw"
           currentUrl={form.cloudinary_url}
           onUploaded={(url) => setForm((prev) => ({ ...prev, cloudinary_url: url }))}
         />
+        {form.cloudinary_url && <p className="text-xs text-emerald-600">Book file ready to connect to the Books page.</p>}
+        {saving && <p className="text-xs text-slate-500">Saving book...</p>}
       </FormModal>
     </div>
   );
