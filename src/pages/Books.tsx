@@ -7,8 +7,10 @@ interface Book {
   title: string;
   author: string;
   cover_url: string;
-  pdf_url: string;
-  epub_url: string;
+  pdf_url?: string | null;
+  epub_url?: string | null;
+  cloudinary_url?: string | null;
+  file_format?: string | null;
   price: number;
   price_type: 'free' | 'paid';
   apple_books_url: string;
@@ -164,6 +166,15 @@ const Books: React.FC = () => {
     setSharingBookId(null);
   };
 
+  const getBookFileUrl = useCallback((book: Book, fileType: 'pdf' | 'epub') => {
+    const configuredUrl = fileType === 'pdf' ? book.pdf_url : book.epub_url;
+    if (configuredUrl) return configuredUrl;
+
+    const format = (book.file_format || '').toLowerCase().replace(/^\./, '');
+    const matchesStoredFormat = format ? format === fileType : fileType === 'pdf';
+    return matchesStoredFormat ? (book.cloudinary_url || '') : '';
+  }, []);
+
   const handleDownload = useCallback(async (book: Book, fileType: 'pdf' | 'epub') => {
     const stateKey = `${book.id}-${fileType}`;
     const current = downloadState[stateKey];
@@ -171,7 +182,7 @@ const Books: React.FC = () => {
 
     setDownloadState(prev => ({ ...prev, [stateKey]: { progress: 0, done: false, error: false } }));
 
-    const fileUrl = fileType === 'pdf' ? book.pdf_url : book.epub_url;
+    const fileUrl = getBookFileUrl(book, fileType);
     if (!fileUrl) {
       setDownloadState(prev => ({ ...prev, [stateKey]: { progress: null, done: false, error: true } }));
       window.setTimeout(() => {
@@ -215,7 +226,7 @@ const Books: React.FC = () => {
 
       setDownloadState(prev => ({ ...prev, [stateKey]: { progress: null, done: false, error: false } }));
     }
-  }, [downloadState]);
+  }, [downloadState, getBookFileUrl]);
 
   const filteredAndSortedBooks = useCallback(() => {
     let filtered = [...books];
@@ -254,7 +265,7 @@ const Books: React.FC = () => {
   const renderDownloadButton = (book: Book, fileType: 'pdf' | 'epub') => {
     const stateKey = `${book.id}-${fileType}`;
     const state = downloadState[stateKey] ?? { progress: null, done: false, error: false };
-    const hasUrl = fileType === 'pdf' ? book.pdf_url : book.epub_url;
+    const hasUrl = getBookFileUrl(book, fileType);
 
     return (
       <button
