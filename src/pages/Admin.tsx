@@ -343,7 +343,11 @@ function BooksTab({ showToast }: { showToast: (m: string, t?: 'success' | 'error
       <FormModal show={showForm} onClose={() => setShowForm(false)} title={editing ? 'Edit Book' : 'Add Book'} onSave={save}>
         <input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} placeholder="Title" className="input-field" />
         <input value={form.author} onChange={(e) => setForm({ ...form, author: e.target.value })} placeholder="Author" className="input-field" />
-        <textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} placeholder="Description" className="input-field min-h-[60px]" />
+        <div>
+          <label className="mb-1 block text-sm font-medium">Course text / description</label>
+          <textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} placeholder="Write the course description or full text lesson" className="input-field min-h-[140px]" />
+          <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">For a text-based course, leave the YouTube URL empty and write the lesson content here.</p>
+        </div>
         <select value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} className="input-field">
           {['Theology', 'Classic', 'Spiritual Growth', 'Devotional', 'Apologetics', 'General'].map((c) => <option key={c}>{c}</option>)}
         </select>
@@ -390,8 +394,16 @@ function CoursesTab({ showToast }: { showToast: (m: string, t?: 'success' | 'err
 
   const save = async () => {
     const youtubeVideoId = getYouTubeVideoId(form.youtube_url);
+    if (!form.title.trim()) {
+      showToast('Please add a course title', 'warning');
+      return;
+    }
     if (form.youtube_url.trim() && !youtubeVideoId) {
       showToast('Please enter a valid YouTube URL or video ID', 'warning');
+      return;
+    }
+    if (!youtubeVideoId && !form.description.trim()) {
+      showToast('Add a YouTube URL or written course content', 'warning');
       return;
     }
 
