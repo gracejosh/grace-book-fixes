@@ -74,6 +74,8 @@ export interface QuizResult {
 export interface ChatRoom {
   id: string;
   name: string;
+  description: string | null;
+  avatar_url: string | null;
   type: 'public' | 'private';
   created_by: string | null;
   participants: string[];
