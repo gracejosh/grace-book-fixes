@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '../lib/supabase';
-import { Search, Heart, Share2, Copy, MessageCircle, Send, Globe, Check, Download, Loader, CheckCircle } from 'lucide-react';
+import { Search, Heart, Share2, Copy, MessageCircle, Send, Globe, Check, Download, Loader, CheckCircle, X } from 'lucide-react';
 
 interface Book {
   id: string;
@@ -21,6 +21,12 @@ type LikeState = {
   count: number;
 };
 
+type DownloadStatus = {
+  progress: number | null;
+  done: boolean;
+  error: boolean;
+};
+
 const Books: React.FC = () => {
   const [books, setBooks] = useState<Book[]>([]);
   const [loading, setLoading] = useState(true);
@@ -32,7 +38,8 @@ const Books: React.FC = () => {
   const [likedBooks, setLikedBooks] = useState<Record<string, LikeState>>({});
   const [sharingBookId, setSharingBookId] = useState<string | null>(null);
   const [copiedBookId, setCopiedBookId] = useState<string | null>(null);
-  const [downloadState, setDownloadState] = useState<Record<string, { progress: number | null; done: boolean; error: boolean }>>({});
+  const [downloadState, setDownloadState] = useState<Record<string, DownloadStatus>>({});
+  const shareMenuRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
   const fetchBooks = useCallback(async () => {
     setLoading(true);
@@ -46,7 +53,7 @@ const Books: React.FC = () => {
       if (error) throw error;
 
       setBooks(data || []);
-      
+
       const cats = Array.from(new Set((data || []).map(book => book.category).filter(Boolean)));
       setCategories(cats as string[]);
     } catch (err) {
@@ -70,6 +77,32 @@ const Books: React.FC = () => {
       // localStorage may be unavailable
     }
   }, []);
+
+  // Close share menu when clicking outside or on Escape
+  useEffect(() => {
+    if (!sharingBookId) return;
+
+    const handleClickOutside = (e: MouseEvent) => {
+      const ref = shareMenuRefs.current[sharingBookId];
+      if (ref && !ref.contains(e.target as Node)) {
+        setSharingBookId(null);
+      }
+    };
+
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setSharingBookId(null);
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('touchstart', handleClickOutside);
+    document.addEventListener('keydown', handleEscape);
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('touchstart', handleClickOutside);
+      document.removeEventListener('keydown', handleEscape);
+    };
+  }, [sharingBookId]);
 
   const toggleLike = (bookId: string) => {
     setLikedBooks((current) => {
@@ -115,6 +148,7 @@ const Books: React.FC = () => {
       }
     }
 
+    // Fallback: copy link if native share not available
     await copyShareLink(book);
   };
 
@@ -138,6 +172,14 @@ const Books: React.FC = () => {
     setDownloadState(prev => ({ ...prev, [stateKey]: { progress: 0, done: false, error: false } }));
 
     const fileUrl = fileType === 'pdf' ? book.pdf_url : book.epub_url;
+    if (!fileUrl) {
+      setDownloadState(prev => ({ ...prev, [stateKey]: { progress: null, done: false, error: true } }));
+      window.setTimeout(() => {
+        setDownloadState(prev => ({ ...prev, [stateKey]: { progress: null, done: false, error: false } }));
+      }, 2500);
+      return;
+    }
+
     const filename = `${book.title}.${fileType}`;
 
     try {
@@ -161,7 +203,16 @@ const Books: React.FC = () => {
         setDownloadState(prev => ({ ...prev, [stateKey]: { progress: null, done: false, error: false } }));
       }, 2000);
     } catch {
-      window.open(fileUrl, '_blank');
+      // Fallback: direct redirect to Cloudinary URL
+      const link = document.createElement('a');
+      link.href = fileUrl;
+      link.download = filename;
+      link.target = '_blank';
+      link.rel = 'noopener noreferrer';
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+
       setDownloadState(prev => ({ ...prev, [stateKey]: { progress: null, done: false, error: false } }));
     }
   }, [downloadState]);
@@ -204,24 +255,30 @@ const Books: React.FC = () => {
     const stateKey = `${book.id}-${fileType}`;
     const state = downloadState[stateKey] ?? { progress: null, done: false, error: false };
     const hasUrl = fileType === 'pdf' ? book.pdf_url : book.epub_url;
-    if (!hasUrl) return null;
 
     return (
       <button
         type="button"
         onClick={() => handleDownload(book, fileType)}
-        className="inline-flex min-h-[42px] flex-1 items-center justify-center rounded-lg border border-emerald-400 bg-emerald-500 px-3 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-emerald-600 disabled:cursor-not-allowed disabled:opacity-70"
+        className="inline-flex min-h-[48px] flex-1 items-center justify-center gap-2 rounded-xl border border-emerald-400 bg-emerald-500 px-4 py-3 text-sm font-bold text-white shadow-md transition-all hover:bg-emerald-600 active:scale-95 disabled:cursor-not-allowed disabled:opacity-60 touch-manipulation"
         disabled={state.progress !== null}
+        aria-label={`Download ${fileType.toUpperCase()}`}
       >
         {state.progress !== null ? (
-          <span className="inline-flex items-center gap-1.5">
-            {state.done ? <CheckCircle className="h-4 w-4" /> : <Loader className="h-4 w-4 animate-spin" />}
-            {state.done ? 'Done' : `${state.progress}%`}
-          </span>
+          <>
+            {state.done ? <CheckCircle className="h-5 w-5" /> : <Loader className="h-5 w-5 animate-spin" />}
+            <span>{state.done ? 'Downloaded' : 'Downloading'}</span>
+          </>
+        ) : state.error ? (
+          <>
+            <X className="h-5 w-5 text-red-200" />
+            <span>No file</span>
+          </>
         ) : (
-          <span className="inline-flex items-center gap-1.5">
-            <Download className="h-4 w-4" /> {fileType.toUpperCase()}
-          </span>
+          <>
+            <Download className="h-5 w-5" />
+            <span>{hasUrl ? fileType.toUpperCase() : fileType.toUpperCase()}</span>
+          </>
         )}
       </button>
     );
@@ -239,14 +296,14 @@ const Books: React.FC = () => {
               placeholder="Search books by title or author..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 border border-purple-700 rounded-lg bg-[#2d1b4e] text-white placeholder-gray-400 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+              className="w-full pl-10 pr-4 py-3 border border-purple-700 rounded-lg bg-[#2d1b4e] text-white placeholder-gray-400 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
             />
           </div>
           <div className="flex gap-4">
             <select
               value={sortBy}
               onChange={(e) => setSortBy(e.target.value as any)}
-              className="px-4 py-2 border border-purple-700 rounded-lg bg-[#2d1b4e] text-white focus:ring-2 focus:ring-purple-500"
+              className="px-4 py-3 border border-purple-700 rounded-lg bg-[#2d1b4e] text-white focus:ring-2 focus:ring-purple-500"
             >
               <option value="newest">Newest</option>
               <option value="oldest">Oldest</option>
@@ -256,7 +313,7 @@ const Books: React.FC = () => {
             <select
               value={category}
               onChange={(e) => setCategory(e.target.value)}
-              className="px-4 py-2 border border-purple-700 rounded-lg bg-[#2d1b4e] text-white focus:ring-2 focus:ring-purple-500"
+              className="px-4 py-3 border border-purple-700 rounded-lg bg-[#2d1b4e] text-white focus:ring-2 focus:ring-purple-500"
             >
               <option value="all">All Categories</option>
               {categories.map(cat => (
@@ -294,84 +351,114 @@ const Books: React.FC = () => {
               </div>
               <div className="p-4">
                 <h3 className="font-semibold text-lg mb-1 line-clamp-2 text-white">{book.title}</h3>
-                <p className="text-gray-300 text-sm mb-3">{book.author}</p>
-                
-                <div className="flex items-center gap-2 mb-3">
-                  {/* Like Button */}
+                <p className="text-gray-300 text-sm mb-4">{book.author}</p>
+
+                {/* Action Buttons - mobile-friendly with 48px min touch targets */}
+                <div className="flex items-center gap-2 mb-4">
                   <button
                     type="button"
                     onClick={() => toggleLike(book.id)}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-purple-700 text-sm text-white hover:bg-purple-800 transition-colors"
+                    className="inline-flex min-h-[48px] min-w-[48px] flex-1 items-center justify-center gap-1.5 rounded-xl border border-purple-700 bg-[#3d2b5e] px-3 py-2.5 text-sm font-medium text-white transition-all hover:bg-purple-800 active:scale-95 touch-manipulation"
                     aria-label={likedBooks[book.id]?.liked ? 'Unlike book' : 'Like book'}
                   >
-                    <Heart className={likedBooks[book.id]?.liked ? 'w-4 h-4 text-rose-500 fill-rose-500' : 'w-4 h-4 text-gray-300'} />
+                    <Heart className={likedBooks[book.id]?.liked ? 'h-5 w-5 text-rose-500 fill-rose-500' : 'h-5 w-5 text-gray-300'} />
                     <span>{likedBooks[book.id]?.count ?? 0}</span>
                   </button>
 
-                  {/* Instant Device Share Button - uses navigator.share */}
                   <button
                     type="button"
                     onClick={() => shareWithWebApi(book)}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-purple-700 text-sm text-white hover:bg-purple-800 transition-colors"
+                    className="inline-flex min-h-[48px] min-w-[48px] flex-1 items-center justify-center gap-1.5 rounded-xl border border-purple-700 bg-[#3d2b5e] px-3 py-2.5 text-sm font-medium text-white transition-all hover:bg-purple-800 active:scale-95 touch-manipulation"
                     aria-label="Share this book"
                   >
-                    <Share2 className="w-4 h-4 text-gray-300" /> Share
+                    <Share2 className="h-5 w-5 text-gray-300" />
+                    <span>Share</span>
                   </button>
 
-                  {/* Share Dropdown Toggle */}
-                  <div className="relative">
+                  <div className="relative" ref={(el) => { shareMenuRefs.current[book.id] = el; }}>
                     <button
                       type="button"
                       onClick={() => setSharingBookId((current) => current === book.id ? null : book.id)}
-                      className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg border border-purple-700 text-sm text-white hover:bg-purple-800 transition-colors"
+                      className="inline-flex min-h-[48px] min-w-[48px] items-center justify-center rounded-xl border border-purple-700 bg-[#3d2b5e] px-3 py-2.5 text-sm font-medium text-white transition-all hover:bg-purple-800 active:scale-95 touch-manipulation"
                       aria-haspopup="menu"
                       aria-expanded={sharingBookId === book.id}
                       aria-label="More share options"
                     >
-                      <Copy className="w-4 h-4 text-gray-300" />
+                      <Copy className="h-5 w-5 text-gray-300" />
                     </button>
+
+                    {/* Share dropdown - mobile-friendly with larger touch targets */}
                     {sharingBookId === book.id && (
-                      <div className="absolute left-0 top-full z-20 mt-2 min-w-44 rounded-lg border border-purple-700 bg-[#2d1b4e] p-2 shadow-lg" role="menu">
-                        <button type="button" onClick={() => shareWithWebApi(book)} className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm text-white hover:bg-purple-800">
-                          <Share2 className="w-4 h-4" /> Share…
-                        </button>
-                        <button type="button" onClick={() => shareToPlatform('whatsapp', book)} className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm text-white hover:bg-purple-800">
-                          <MessageCircle className="w-4 h-4 text-green-400" /> WhatsApp
-                        </button>
-                        <button type="button" onClick={() => shareToPlatform('facebook', book)} className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm text-white hover:bg-purple-800">
-                          <Globe className="w-4 h-4 text-blue-400" /> Facebook
-                        </button>
-                        <button type="button" onClick={() => shareToPlatform('telegram', book)} className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm text-white hover:bg-purple-800">
-                          <Send className="w-4 h-4 text-sky-400" /> Telegram
-                        </button>
-                        <button type="button" onClick={() => copyShareLink(book)} className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm text-white hover:bg-purple-800">
-                          {copiedBookId === book.id ? <Check className="w-4 h-4 text-green-400" /> : <Copy className="w-4 h-4" />}
-                          {copiedBookId === book.id ? 'Copied' : 'Copy Link'}
-                        </button>
-                      </div>
+                      <>
+                        {/* Invisible overlay to catch touches on mobile */}
+                        <div
+                          className="fixed inset-0 z-30"
+                          onClick={() => setSharingBookId(null)}
+                        />
+                        <div
+                          className="absolute right-0 top-full z-40 mt-2 w-56 rounded-xl border border-purple-700 bg-[#2d1b4e] p-2 shadow-2xl"
+                          role="menu"
+                        >
+                          <button
+                            type="button"
+                            onClick={() => shareWithWebApi(book)}
+                            className="flex w-full items-center gap-3 rounded-lg px-4 py-3 text-left text-sm font-medium text-white transition-colors hover:bg-purple-800 active:bg-purple-900 touch-manipulation"
+                          >
+                            <Share2 className="h-5 w-5 flex-shrink-0" /> Share to device…
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => shareToPlatform('whatsapp', book)}
+                            className="flex w-full items-center gap-3 rounded-lg px-4 py-3 text-left text-sm font-medium text-white transition-colors hover:bg-purple-800 active:bg-purple-900 touch-manipulation"
+                          >
+                            <MessageCircle className="h-5 w-5 flex-shrink-0 text-green-400" /> WhatsApp
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => shareToPlatform('facebook', book)}
+                            className="flex w-full items-center gap-3 rounded-lg px-4 py-3 text-left text-sm font-medium text-white transition-colors hover:bg-purple-800 active:bg-purple-900 touch-manipulation"
+                          >
+                            <Globe className="h-5 w-5 flex-shrink-0 text-blue-400" /> Facebook
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => shareToPlatform('telegram', book)}
+                            className="flex w-full items-center gap-3 rounded-lg px-4 py-3 text-left text-sm font-medium text-white transition-colors hover:bg-purple-800 active:bg-purple-900 touch-manipulation"
+                          >
+                            <Send className="h-5 w-5 flex-shrink-0 text-sky-400" /> Telegram
+                          </button>
+                          <div className="my-1 h-px bg-purple-800" />
+                          <button
+                            type="button"
+                            onClick={() => copyShareLink(book)}
+                            className="flex w-full items-center gap-3 rounded-lg px-4 py-3 text-left text-sm font-medium text-white transition-colors hover:bg-purple-800 active:bg-purple-900 touch-manipulation"
+                          >
+                            {copiedBookId === book.id ? <Check className="h-5 w-5 flex-shrink-0 text-green-400" /> : <Copy className="h-5 w-5 flex-shrink-0" />}
+                            {copiedBookId === book.id ? 'Copied!' : 'Copy Link'}
+                          </button>
+                        </div>
+                      </>
                     )}
                   </div>
                 </div>
 
-                <div className="space-y-2">
-                  {book.price_type === 'free' && (
-                    <div className="flex gap-2">
-                      {renderDownloadButton(book, 'pdf')}
-                      {renderDownloadButton(book, 'epub')}
-                    </div>
-                  )}
-                  
-                  {book.price_type === 'paid' && book.apple_books_url && (
-                    <a
-                      href={book.apple_books_url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="block w-full text-center px-3 py-2 bg-white text-purple-900 rounded-lg hover:bg-gray-200 transition-colors text-sm font-semibold"
-                    >
-                      Buy on Apple Books
-                    </a>
-                  )}
+                {/* Download buttons - always visible for all books */}
+                <div className="flex gap-2">
+                  {renderDownloadButton(book, 'pdf')}
+                  {renderDownloadButton(book, 'epub')}
                 </div>
+
+                {/* Buy button for paid books */}
+                {book.price_type === 'paid' && book.apple_books_url && (
+                  <a
+                    href={book.apple_books_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="mt-2 block w-full text-center px-3 py-3 bg-white text-purple-900 rounded-xl hover:bg-gray-200 transition-colors text-sm font-bold min-h-[48px] leading-[48px]"
+                  >
+                    Buy on Apple Books
+                  </a>
+                )}
               </div>
             </div>
           ))}
