@@ -464,11 +464,12 @@ export default function Chat() {
     setShowRoomInfo(false);
   };
 
-  const openRoomInfo = () => {
-    if (!selectedRoom) return;
-    setRoomProfileName(selectedRoom.name || '');
-    setRoomProfileDescription(selectedRoom.description || '');
-    setRoomProfileAvatar(selectedRoom.avatar_url || null);
+  const openRoomInfo = (room: ChatRoom | null = selectedRoom) => {
+    if (!room) return;
+    setSelectedRoom(room);
+    setRoomProfileName(room.name || '');
+    setRoomProfileDescription(room.description || '');
+    setRoomProfileAvatar(room.avatar_url || null);
     setEditingRoomProfile(false);
     setShowRoomInfo(true);
   };
@@ -736,18 +737,30 @@ export default function Chat() {
             </div>
           ) : (
             filteredRooms.map((room) => (
-              <button key={room.id} onClick={() => joinRoom(room)}
-                className={`w-full flex items-center gap-3 p-3 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors text-left ${selectedRoom?.id === room.id ? 'bg-primary-50 dark:bg-primary-900/20' : ''}`}>
-                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary-500 to-gold-500 flex items-center justify-center shrink-0 overflow-hidden">
-                  {room.avatar_url ? <img src={room.avatar_url} alt="" className="h-full w-full object-cover" /> : room.type === 'private' ? <Lock className="h-5 w-5 text-white" /> : <span className="text-lg font-bold text-white">{(room.name || 'G').charAt(0).toUpperCase()}</span>}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="font-semibold text-sm truncate">{room.name}</p>
-                  <p className="text-xs text-slate-500 flex items-center gap-1">
-                    <Users className="h-3 w-3" /> {room.participants?.length || 0} members
-                  </p>
-                </div>
-              </button>
+              <div key={room.id} className={`flex items-center gap-1 border-b border-slate-100 dark:border-slate-800 ${selectedRoom?.id === room.id ? 'bg-primary-50 dark:bg-primary-900/20' : ''}`}>
+                <button type="button" onClick={() => void joinRoom(room)}
+                  className="flex min-w-0 flex-1 items-center gap-3 p-3 text-left transition-colors hover:bg-slate-100 dark:hover:bg-slate-800">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-gradient-to-br from-primary-500 to-gold-500">
+                    {room.avatar_url ? <img src={room.avatar_url} alt="" className="h-full w-full object-cover" /> : room.type === 'private' ? <Lock className="h-5 w-5 text-white" /> : <span className="text-lg font-bold text-white">{(room.name || 'G').charAt(0).toUpperCase()}</span>}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-semibold">{room.name}</p>
+                    <p className="flex items-center gap-1 text-xs text-slate-500">
+                      <Users className="h-3 w-3" /> {room.participants?.length || 0} members
+                    </p>
+                  </div>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => openRoomInfo(room)}
+                  className="mr-2 inline-flex shrink-0 items-center gap-1 rounded-lg px-2 py-2 text-xs font-semibold text-primary-600 transition-colors hover:bg-primary-100 dark:text-primary-400 dark:hover:bg-primary-900/30"
+                  aria-label={`${room.type === 'public' ? 'View group profile' : 'View room information'} for ${room.name}`}
+                  title={room.type === 'public' ? 'Group profile' : 'Room information'}
+                >
+                  <Info className="h-4 w-4" />
+                  <span className="hidden lg:inline">{room.type === 'public' ? 'Profile' : 'Info'}</span>
+                </button>
+              </div>
             ))
           )}
         </div>
@@ -778,8 +791,9 @@ export default function Chat() {
                   <Users className="h-3 w-3" /> {selectedRoom.participants?.length || 0} members
                 </p>
               </div>
-              <button type="button" onClick={openRoomInfo} className="rounded-xl p-2 text-slate-500 transition hover:bg-slate-100 hover:text-slate-900 dark:hover:bg-slate-800 dark:hover:text-white" aria-label="View group information" title="Group information">
+              <button type="button" onClick={() => openRoomInfo()} className="inline-flex items-center gap-1.5 rounded-xl p-2 text-sm font-semibold text-slate-500 transition hover:bg-slate-100 hover:text-slate-900 dark:hover:bg-slate-800 dark:hover:text-white" aria-label="View group profile" title="Group profile">
                 <Info className="h-5 w-5" />
+                <span className="hidden sm:inline">Group profile</span>
               </button>
             </div>
 
