@@ -14,6 +14,28 @@ import {
 import { EmptyState } from '@/components/ui';
 
 const ADMIN_PASSWORD = 'grace2024';
+
+const getYouTubeVideoId = (value?: string | null) => {
+  if (!value || typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  const normalize = (candidate: string | null | undefined) => /^[A-Za-z0-9_-]{11}$/.test(candidate || '') ? candidate : null;
+
+  const plainId = normalize(trimmed);
+  if (plainId) return plainId;
+
+  try {
+    const url = new URL(trimmed);
+    const host = url.hostname.toLowerCase().replace(/^www\./, '');
+    if (host === 'youtu.be') return normalize(url.pathname.split('/').filter(Boolean)[0]);
+    if (host === 'youtube.com' || host === 'm.youtube.com') {
+      return normalize(url.searchParams.get('v') || (url.pathname.match(/^\/(?:embed|shorts|v)\/([^/?]+)/) || [])[1]);
+    }
+  } catch {
+    // Fall through to the plain-text URL pattern below.
+  }
+
+  return normalize((trimmed.match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?v=|embed\/|shorts\/|v\/))([A-Za-z0-9_-]{11})/) || [])[1]);
+};
 type Tab = 'dashboard' | 'books' | 'courses' | 'quizzes' | 'posts' | 'users' | 'chat' | 'ads' | 'messages' | 'flyers' | 'blogs';
 
 export default function Admin() {
@@ -367,11 +389,31 @@ function CoursesTab({ showToast }: { showToast: (m: string, t?: 'success' | 'err
   useEffect(() => { load(); }, []);
 
   const save = async () => {
-    if (editing) {
-      await supabase.from('courses').update(form).eq('id', editing.id);
-    } else {
-      await supabase.from('courses').insert(form);
+    const youtubeVideoId = getYouTubeVideoId(form.youtube_url);
+    if (form.youtube_url.trim() && !youtubeVideoId) {
+      showToast('Please enter a valid YouTube URL or video ID', 'warning');
+      return;
     }
+
+    const coursePayload = {
+      title: form.title.trim(),
+      description: form.description.trim(),
+      youtube_video_id: youtubeVideoId || '',
+      thumbnail_url: form.thumbnail_url.trim(),
+      duration: form.duration.trim(),
+      instructor: form.instructor.trim(),
+      category: form.category,
+    };
+
+    const result = editing
+      ? await supabase.from('courses').update(coursePayload).eq('id', editing.id)
+      : await supabase.from('courses').insert(coursePayload);
+
+    if (result.error) {
+      showToast(result.error.message || 'Could not save course', 'error');
+      return;
+    }
+
     showToast(editing ? 'Course updated' : 'Course added', 'success');
     setShowForm(false); setEditing(null);
     setForm({ title: '', description: '', youtube_url: '', thumbnail_url: '', duration: '', instructor: '', category: 'Bible Study' });
