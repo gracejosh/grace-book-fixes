@@ -1,6 +1,5 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useNavigate } from 'react-router-dom';
 import { supabase, uploadToCloudinary } from '@/lib/supabase';
 import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/context/ToastContext';
@@ -19,7 +18,6 @@ const DAILY_MESSAGE_LIMIT = 50;
 export default function Chat() {
   const { user, profile } = useAuth();
   const { showToast } = useToast();
-  const navigate = useNavigate();
   const [rooms, setRooms] = useState<ChatRoom[]>([]);
   const [selectedRoom, setSelectedRoom] = useState<ChatRoom | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -439,8 +437,27 @@ export default function Chat() {
   };
 
   const openUserProfile = (personId: string) => {
-    setSelectedUser(null);
-    navigate(`/profile?user=${encodeURIComponent(personId)}`);
+    const cached = profilesRef.current[personId] || users.find((u) => u.id === personId);
+    if (cached) {
+      setSelectedUser(cached);
+      return;
+    }
+    supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', personId)
+      .single()
+      .then(({ data }) => {
+        if (data) {
+          const person = data as Profile;
+          setSelectedUser(person);
+          setProfiles((prev) => {
+            const next = { ...prev, [personId]: person };
+            profilesRef.current = next;
+            return next;
+          });
+        }
+      });
   };
 
   const startDirectChat = async (person: Profile) => {
@@ -622,7 +639,7 @@ export default function Chat() {
 
         <div className="border-t border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-3">
           <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
             <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search groups..." className="input-field w-full py-2 pl-10 text-sm" aria-label="Search groups" />
           </div>
         </div>
@@ -950,7 +967,7 @@ export default function Chat() {
                   </div>
                 )}
                 <h3 className="mt-4 text-xl font-bold">{selectedUser.username || 'Unnamed user'}</h3>
-                <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Community member</p>
+                <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">{selectedUser.bio || 'Community member'}</p>
                 <button
                   type="button"
                   onClick={() => void startDirectChat(selectedUser)}
@@ -958,7 +975,7 @@ export default function Chat() {
                   className="mt-5 inline-flex items-center justify-center gap-2 rounded-xl bg-primary-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-primary-700 disabled:cursor-wait disabled:opacity-70"
                 >
                   {openingUserId === selectedUser.id ? <Loader className="h-4 w-4 animate-spin" /> : <MessageCircle className="h-4 w-4" />}
-                  {openingUserId === selectedUser.id ? 'Opening chat...' : 'Start chat'}
+                  {openingUserId === selectedUser.id ? 'Opening chat...' : 'Send Message'}
                 </button>
               </div>
             </motion.div>
