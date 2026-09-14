@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
-import { Newspaper, Heart, Search } from 'lucide-react';
+import { Newspaper, Heart, Search, MessageCircle } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/context/ToastContext';
-import type { Blog, Profile } from '@/types';
+import type { Blog, Profile, ChatRoom } from '@/types';
 import { EmptyState } from '@/components/ui';
 
 export default function Blogs() {
@@ -13,6 +13,7 @@ export default function Blogs() {
   const [authors, setAuthors] = useState<Record<string, Profile>>({});
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const [messagingId, setMessagingId] = useState<string | null>(null);
   const { user } = useAuth();
   const { showToast } = useToast();
   const navigate = useNavigate();
@@ -47,6 +48,50 @@ export default function Blogs() {
       await supabase.from('blogs').update({ likes_count: blog.likes_count + 1 }).eq('id', blog.id);
     }
     load();
+  };
+
+  const startDirectChat = async (authorId: string) => {
+    if (!user) { showToast('Please sign in to send messages', 'warning'); return; }
+    if (authorId === user.id) { showToast('You cannot message yourself', 'warning'); return; }
+    setMessagingId(authorId);
+    try {
+      const { data: privateRooms, error: roomsError } = await supabase
+        .from('chat_rooms')
+        .select('*')
+        .eq('type', 'private')
+        .eq('is_active', true)
+        .contains('participants', [user.id, authorId]);
+      if (roomsError) throw roomsError;
+
+      const existingRoom = ((privateRooms as ChatRoom[] | null) ?? []).find((room) => {
+        const participants = room.participants || [];
+        return participants.length === 2 && participants.includes(user.id) && participants.includes(authorId);
+      });
+
+      let directRoom: ChatRoom | null = existingRoom || null;
+      if (!directRoom) {
+        const author = authors[authorId];
+        const { data: createdRoom, error: createError } = await supabase
+          .from('chat_rooms')
+          .insert({
+            name: 'Chat with ' + (author?.username || 'user'),
+            type: 'private',
+            created_by: user.id,
+            participants: [user.id, authorId],
+            is_active: true,
+          })
+          .select()
+          .single();
+        if (createError) throw createError;
+        directRoom = createdRoom as ChatRoom;
+      }
+
+      navigate(`/chat?room=${directRoom.id}`);
+    } catch {
+      showToast('Could not start direct chat', 'error');
+    } finally {
+      setMessagingId(null);
+    }
   };
 
   const filtered = blogs.filter((b) => {
@@ -103,6 +148,16 @@ export default function Blogs() {
                     )}
                     <span onClick={() => openAuthorProfile(author?.id)} className="text-xs font-medium">{author?.username ?? 'Unknown'}</span>
                     <span className="text-xs text-slate-400">{new Date(b.created_at).toLocaleDateString()}</span>
+                    {author && author.id !== user?.id && (
+                      <button
+                        onClick={() => startDirectChat(author.id)}
+                        disabled={messagingId === author.id}
+                        className="flex items-center gap-1 text-xs font-medium text-primary-600 hover:text-primary-700 transition-colors disabled:opacity-50"
+                      >
+                        <MessageCircle className="h-3.5 w-3.5" />
+                        {messagingId === author.id ? 'Opening...' : 'Message'}
+                      </button>
+                    )}
                   </div>
                   <h2 className="font-bold text-lg mb-1">{b.title ?? 'Untitled'}</h2>
                   {b.category && <span className="inline-block text-xs px-2 py-0.5 rounded-lg bg-primary-100 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300 mb-2">{b.category}</span>}
