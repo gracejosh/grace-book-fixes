@@ -194,7 +194,7 @@ const Books: React.FC = () => {
     const filename = `${book.title}.${fileType}`;
 
     try {
-      const proxyUrl = `/api/download?url=${encodeURIComponent(fileUrl)}`;
+      const proxyUrl = `/api/download?url=${encodeURIComponent(fileUrl)}&filename=${encodeURIComponent(filename)}`;
 
       const response = await fetch(proxyUrl);
       if (!response.ok) throw new Error('Download failed');
@@ -214,17 +214,11 @@ const Books: React.FC = () => {
         setDownloadState(prev => ({ ...prev, [stateKey]: { progress: null, done: false, error: false } }));
       }, 2000);
     } catch {
-      // Fallback: direct redirect to Cloudinary URL
-      const link = document.createElement('a');
-      link.href = fileUrl;
-      link.download = filename;
-      link.target = '_blank';
-      link.rel = 'noopener noreferrer';
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-
-      setDownloadState(prev => ({ ...prev, [stateKey]: { progress: null, done: false, error: false } }));
+      // Keep failed downloads inside the app; never redirect users to Cloudinary.
+      setDownloadState(prev => ({ ...prev, [stateKey]: { progress: null, done: false, error: true } }));
+      window.setTimeout(() => {
+        setDownloadState(prev => ({ ...prev, [stateKey]: { progress: null, done: false, error: false } }));
+      }, 2500);
     }
   }, [downloadState, getBookFileUrl]);
 
