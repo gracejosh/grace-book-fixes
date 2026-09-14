@@ -8,7 +8,7 @@ import type { ChatRoom, Message, Profile } from '@/types';
 import {
   MessageCircle, Send, Plus, Users, Hash, Lock, Search, Smile,
   Image as ImageIcon, Reply, Trash2, Edit2, X, ArrowLeft, Check,
-  AlertCircle, Loader, Mic, Square, BookOpen, Library, ChevronDown,
+  AlertCircle, Loader, Mic, Square, BookOpen, Library, ChevronDown, Info, CalendarDays, ShieldCheck, UserRound,
 } from 'lucide-react';
 import { EmptyState } from '@/components/ui';
 
@@ -43,6 +43,7 @@ export default function Chat() {
   const [selectedUser, setSelectedUser] = useState<Profile | null>(null);
   const [openingUserId, setOpeningUserId] = useState<string | null>(null);
   const [showMobileChat, setShowMobileChat] = useState(false);
+  const [showRoomInfo, setShowRoomInfo] = useState(false);
   const [sendingMessage, setSendingMessage] = useState(false);
   const [typingUsers, setTypingUsers] = useState<string[]>([]);
   const [onlineUsers, setOnlineUsers] = useState<string[]>([]);
@@ -436,6 +437,7 @@ export default function Chat() {
         .eq('id', room.id);
     }
     setSelectedRoom(room);
+    setShowRoomInfo(false);
   };
 
   const openUserProfile = (personId: string) => {
@@ -481,6 +483,7 @@ export default function Chat() {
       const roomToOpen = directRoom;
       setRooms((previous) => previous.some((room) => room.id === roomToOpen.id) ? previous : [...previous, roomToOpen]);
       setSelectedRoom(roomToOpen);
+      setShowRoomInfo(false);
       setSelectedUser(null);
       setShowMobileChat(true);
     } catch {
@@ -493,6 +496,16 @@ export default function Chat() {
   const filteredRooms = rooms.filter((r) => r.name?.toLowerCase().includes(search.toLowerCase()) ?? false);
   const normalizedUserSearch = userSearch.trim().toLowerCase();
   const filteredUsers = users.filter((person) => (person.username || '').toLowerCase().includes(normalizedUserSearch));
+  const selectedRoomCreatedBy = selectedRoom ? (selectedRoom as ChatRoom & { created_by?: string | null }).created_by : null;
+  const selectedRoomCreator = selectedRoomCreatedBy ? profiles[selectedRoomCreatedBy] : null;
+  const selectedRoomMembers = selectedRoom
+    ? (selectedRoom.participants || [])
+        .map((memberId) => memberId === user?.id ? profile : profiles[memberId])
+        .filter((member): member is Profile => Boolean(member))
+    : [];
+  const selectedRoomAbout = selectedRoom?.type === 'private'
+    ? 'A private space for a focused conversation between members.'
+    : 'A welcoming community space to share encouragement, questions, and ideas.';
   const formatTime = (iso: string) => new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
   if (!user) {
@@ -640,7 +653,7 @@ export default function Chat() {
               <button key={room.id} onClick={() => joinRoom(room)}
                 className={`w-full flex items-center gap-3 p-3 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors text-left ${selectedRoom?.id === room.id ? 'bg-primary-50 dark:bg-primary-900/20' : ''}`}>
                 <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary-500 to-gold-500 flex items-center justify-center shrink-0">
-                  {room.type === 'private' ? <Lock className="h-5 w-5 text-white" /> : <Hash className="h-5 w-5 text-white" />}
+                  {room.type === 'private' ? <Lock className="h-5 w-5 text-white" /> : <span className="text-lg font-bold text-white">{(room.name || 'G').charAt(0).toUpperCase()}</span>}
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="font-semibold text-sm truncate">{room.name}</p>
@@ -679,6 +692,10 @@ export default function Chat() {
                   <Users className="h-3 w-3" /> {selectedRoom.participants?.length || 0} members
                 </p>
               </div>
+              <button type="button" onClick={() => setShowRoomInfo(true)} className="rounded-xl p-2 text-slate-500 transition hover:bg-slate-100 hover:text-slate-900 dark:hover:bg-slate-800 dark:hover:text-white" aria-label="View group information" title="Group information">
+                <Info className="h-5 w-5" />
+              </button>
+            </div>
             </div>
 
             {/* Daily limit banner */}
@@ -909,6 +926,58 @@ export default function Chat() {
           </div>
         )}
       </div>
+
+      <AnimatePresence>
+        {showRoomInfo && selectedRoom && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
+            onClick={() => setShowRoomInfo(false)}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.96, y: 8 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.96, y: 8 }}
+              transition={{ duration: 0.18 }}
+              role="dialog"
+              aria-modal="true"
+              aria-label={selectedRoom.name + ' information'}
+              className="w-full max-w-lg overflow-hidden rounded-3xl bg-white shadow-2xl dark:bg-slate-900"
+              onClick={(event) => event.stopPropagation()}
+            >
+              <div className="relative overflow-hidden bg-gradient-to-br from-primary-700 via-primary-600 to-indigo-700 px-6 pb-7 pt-6 text-white">
+                <div className="absolute -right-10 -top-16 h-40 w-40 rounded-full bg-white/10" />
+                <div className="relative flex items-start justify-between gap-4">
+                  <div className="flex items-center gap-4">
+                    <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl border border-white/20 bg-white/15 shadow-lg backdrop-blur">
+                      {selectedRoom.type === 'private' ? <Lock className="h-7 w-7" /> : <span className="text-2xl font-bold">{(selectedRoom.name || 'G').charAt(0).toUpperCase()}</span>}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-xs font-bold uppercase tracking-[0.16em] text-blue-100">{selectedRoom.type === 'private' ? 'Private conversation' : 'Community group'}</p>
+                      <h2 className="mt-1 truncate text-2xl font-bold">{selectedRoom.name}</h2>
+                    </div>
+                  </div>
+                  <button type="button" onClick={() => setShowRoomInfo(false)} className="rounded-xl p-2 text-white/80 transition hover:bg-white/15 hover:text-white" aria-label="Close group information"><X className="h-5 w-5" /></button>
+                </div>
+              </div>
+              <div className="max-h-[70vh] overflow-y-auto p-6">
+                <div className="grid grid-cols-3 gap-3">
+                  <div className="rounded-2xl bg-slate-50 p-3 text-center dark:bg-slate-800"><Users className="mx-auto h-5 w-5 text-primary-600 dark:text-primary-400" /><p className="mt-2 text-lg font-bold text-slate-900 dark:text-white">{selectedRoom.participants?.length || 0}</p><p className="text-xs text-slate-500 dark:text-slate-400">Members</p></div>
+                  <div className="rounded-2xl bg-slate-50 p-3 text-center dark:bg-slate-800"><span className="mx-auto flex h-5 w-5 items-center justify-center"><span className="h-2.5 w-2.5 rounded-full bg-emerald-500" /></span><p className="mt-2 text-lg font-bold text-slate-900 dark:text-white">{onlineUsers.length}</p><p className="text-xs text-slate-500 dark:text-slate-400">Online now</p></div>
+                  <div className="rounded-2xl bg-slate-50 p-3 text-center dark:bg-slate-800"><ShieldCheck className="mx-auto h-5 w-5 text-primary-600 dark:text-primary-400" /><p className="mt-2 text-sm font-bold capitalize text-slate-900 dark:text-white">{selectedRoom.type}</p><p className="text-xs text-slate-500 dark:text-slate-400">Access</p></div>
+                </div>
+                <div className="mt-5 rounded-2xl border border-slate-200 p-4 dark:border-slate-700">
+                  <div className="flex items-start gap-3"><Info className="mt-0.5 h-5 w-5 shrink-0 text-primary-600 dark:text-primary-400" /><div><h3 className="font-bold text-slate-900 dark:text-white">About this group</h3><p className="mt-1 text-sm leading-6 text-slate-600 dark:text-slate-300">{selectedRoomAbout}</p></div></div>
+                  <div className="mt-4 flex flex-wrap gap-x-4 gap-y-2 text-xs text-slate-500 dark:text-slate-400"><span className="inline-flex items-center gap-1.5"><CalendarDays className="h-3.5 w-3.5" /> Created {selectedRoom.created_at ? new Date(selectedRoom.created_at).toLocaleDateString() : 'recently'}</span>{selectedRoomCreator && <span className="inline-flex items-center gap-1.5"><UserRound className="h-3.5 w-3.5" /> By {selectedRoomCreator.username || 'Community member'}</span>}</div>
+                </div>
+                <div className="mt-5"><div className="mb-3 flex items-center justify-between"><h3 className="font-bold text-slate-900 dark:text-white">Members</h3><span className="text-xs text-slate-500 dark:text-slate-400">{selectedRoom.participants?.length || 0} total</span></div>{selectedRoomMembers.length > 0 ? <div className="space-y-2">{selectedRoomMembers.slice(0, 6).map((member) => <div key={member.id} className="flex items-center gap-3 rounded-xl bg-slate-50 p-2.5 dark:bg-slate-800">{member.avatar_url ? <img src={member.avatar_url} alt="" className="h-9 w-9 rounded-full object-cover" /> : <div className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-primary-500 to-gold-500 text-sm font-bold text-white">{(member.username || '?').charAt(0).toUpperCase()}</div>}<span className="min-w-0 flex-1 truncate text-sm font-semibold text-slate-700 dark:text-slate-200">{member.username || 'Community member'}</span>{member.id === selectedRoomCreatedBy && <span className="text-xs font-semibold text-primary-600 dark:text-primary-400">Creator</span>}</div>)}</div> : <p className="rounded-xl bg-slate-50 p-4 text-sm text-slate-500 dark:bg-slate-800 dark:text-slate-400">Member profiles will appear here as they join the group.</p>}{selectedRoomMembers.length > 6 && <p className="mt-2 text-center text-xs text-slate-500 dark:text-slate-400">And {selectedRoomMembers.length - 6} more members</p>}</div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       <AnimatePresence>
         {selectedUser && (
