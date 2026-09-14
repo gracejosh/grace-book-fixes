@@ -8,7 +8,7 @@ import type { ChatRoom, Message, Profile } from '@/types';
 import {
   MessageCircle, Send, Plus, Users, Hash, Lock, Search, Smile,
   Image as ImageIcon, Reply, Trash2, Edit2, X, ArrowLeft, Check,
-  AlertCircle, Loader, Mic, Square, BookOpen, Library, ChevronDown, Info, CalendarDays, ShieldCheck, UserRound,
+  AlertCircle, Loader, Mic, Square, BookOpen, ChevronDown, Info, CalendarDays, ShieldCheck, UserRound, Camera,
 } from 'lucide-react';
 import { EmptyState } from '@/components/ui';
 
@@ -29,6 +29,7 @@ export default function Chat() {
   const [error, setError] = useState<string | null>(null);
   const [showNewRoom, setShowNewRoom] = useState(false);
   const [roomName, setRoomName] = useState('');
+  const [roomDescription, setRoomDescription] = useState('');
   const [roomType, setRoomType] = useState<'public' | 'private'>('public');
   const [replyTo, setReplyTo] = useState<Message | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -44,6 +45,12 @@ export default function Chat() {
   const [openingUserId, setOpeningUserId] = useState<string | null>(null);
   const [showMobileChat, setShowMobileChat] = useState(false);
   const [showRoomInfo, setShowRoomInfo] = useState(false);
+  const [editingRoomProfile, setEditingRoomProfile] = useState(false);
+  const [roomProfileName, setRoomProfileName] = useState('');
+  const [roomProfileDescription, setRoomProfileDescription] = useState('');
+  const [roomProfileAvatar, setRoomProfileAvatar] = useState<string | null>(null);
+  const [savingRoomProfile, setSavingRoomProfile] = useState(false);
+  const [uploadingRoomAvatar, setUploadingRoomAvatar] = useState(false);
   const [sendingMessage, setSendingMessage] = useState(false);
   const [typingUsers, setTypingUsers] = useState<string[]>([]);
   const [onlineUsers, setOnlineUsers] = useState<string[]>([]);
@@ -51,12 +58,12 @@ export default function Chat() {
   const [uploadProgress, setUploadProgress] = useState<number | null>(null);
   const [isRecording, setIsRecording] = useState(false);
   const [recordSeconds, setRecordSeconds] = useState(0);
-  const [imagePreview, setImagePreview] = useState<string | null>(null);
 
   const profilesRef = useRef<Record<string, Profile>>({});
   const scrollRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const roomAvatarInputRef = useRef<HTMLInputElement>(null);
   const isAtBottomRef = useRef(true);
   const lastMessageCountRef = useRef(0);
   const lastSenderRef = useRef<string | null>(null);
@@ -164,7 +171,13 @@ export default function Chat() {
       setMessages(msgs);
       setShowMobileChat(true);
       const senderIds = msgs.map((m) => m.sender_id).filter(Boolean) as string[];
-      if (senderIds.length > 0) loadProfiles(senderIds);
+      const roomProfileIds = [
+        ...(selectedRoom.participants || []),
+        selectedRoom.created_by,
+      ].filter(Boolean) as string[];
+      if (senderIds.length > 0 || roomProfileIds.length > 0) {
+        loadProfiles([...senderIds, ...roomProfileIds]);
+      }
 
       // Mark unread messages from others as read
       const unreadIds = msgs.filter((m) => !m.is_read && m.sender_id !== user?.id).map((m) => m.id);
@@ -419,25 +432,99 @@ export default function Chat() {
   const createRoom = async () => {
     if (!user || !roomName.trim()) return;
     const { data, error } = await supabase.from('chat_rooms').insert({
-      name: roomName.trim(), type: roomType, created_by: user.id,
+      name: roomName.trim(), description: roomDescription.trim() || null, avatar_url: null, type: roomType, created_by: user.id,
       participants: [user.id], is_active: true,
     }).select().single();
     if (error) { showToast('Could not create room', 'error'); return; }
     setRooms((prev) => [...prev, data as ChatRoom]);
     setSelectedRoom(data as ChatRoom);
-    setRoomName(''); setShowNewRoom(false);
+    setRoomName(''); setRoomDescription(''); setShowNewRoom(false);
     showToast('Room created!', 'success');
   };
 
-  const joinRoom = (room: ChatRoom) => {
+  const joinRoom = async (room: ChatRoom) => {
     if (!user) return;
     if (room.participants && !room.participants.includes(user.id)) {
-      supabase.from('chat_rooms')
-        .update({ participants: [...(room.participants || []), user.id] })
-        .eq('id', room.id);
+      const nextParticipants = [...(room.participants || []), user.id];
+      const { data, error } = await supabase.from('chat_rooms')
+        .update({ participants: nextParticipants })
+        .eq('id', room.id)
+        .select()
+        .single();
+      if (error) {
+        showToast('Could not join group', 'error');
+        return;
+      }
+      const joinedRoom = data as ChatRoom;
+      setRooms((previous) => previous.map((current) => current.id === room.id ? joinedRoom : current));
+      setSelectedRoom(joinedRoom);
+    } else {
+      setSelectedRoom(room);
     }
-    setSelectedRoom(room);
     setShowRoomInfo(false);
+  };
+
+  const openRoomInfo = () => {
+    if (!selectedRoom) return;
+    setRoomProfileName(selectedRoom.name || '');
+    setRoomProfileDescription(selectedRoom.description || '');
+    setRoomProfileAvatar(selectedRoom.avatar_url || null);
+    setEditingRoomProfile(false);
+    setShowRoomInfo(true);
+  };
+
+  const handleRoomAvatarUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    if (file.size > MAX_FILE_SIZE) {
+      showToast('Group image must be under 5MB', 'error');
+      return;
+    }
+
+    setUploadingRoomAvatar(true);
+    try {
+      const url = await uploadToCloudinary(file, 'image');
+      setRoomProfileAvatar(url);
+      showToast('Group image ready to save', 'success');
+    } catch {
+      showToast('Could not upload group image', 'error');
+    } finally {
+      setUploadingRoomAvatar(false);
+      if (roomAvatarInputRef.current) roomAvatarInputRef.current.value = '';
+    }
+  };
+
+  const saveRoomProfile = async () => {
+    if (!user || !selectedRoom || selectedRoom.created_by !== user.id) return;
+    const name = roomProfileName.trim();
+    if (!name) {
+      showToast('Group name is required', 'error');
+      return;
+    }
+
+    setSavingRoomProfile(true);
+    const { data, error } = await supabase
+      .from('chat_rooms')
+      .update({
+        name,
+        description: roomProfileDescription.trim() || null,
+        avatar_url: roomProfileAvatar,
+      })
+      .eq('id', selectedRoom.id)
+      .eq('created_by', user.id)
+      .select()
+      .single();
+
+    if (error) {
+      showToast('Could not save group profile', 'error');
+    } else {
+      const updatedRoom = data as ChatRoom;
+      setRooms((previous) => previous.map((room) => room.id === updatedRoom.id ? updatedRoom : room));
+      setSelectedRoom(updatedRoom);
+      setEditingRoomProfile(false);
+      showToast('Group profile updated', 'success');
+    }
+    setSavingRoomProfile(false);
   };
 
   const openUserProfile = (personId: string) => {
@@ -496,13 +583,11 @@ export default function Chat() {
   const filteredRooms = rooms.filter((r) => r.name?.toLowerCase().includes(search.toLowerCase()) ?? false);
   const normalizedUserSearch = userSearch.trim().toLowerCase();
   const filteredUsers = users.filter((person) => (person.username || '').toLowerCase().includes(normalizedUserSearch));
-  const selectedRoomCreatedBy = selectedRoom ? (selectedRoom as ChatRoom & { created_by?: string | null }).created_by : null;
-  const selectedRoomCreator = selectedRoomCreatedBy ? profiles[selectedRoomCreatedBy] : null;
-  const selectedRoomMembers = selectedRoom
-    ? (selectedRoom.participants || [])
-        .map((memberId) => memberId === user?.id ? profile : profiles[memberId])
-        .filter((member): member is Profile => Boolean(member))
-    : [];
+  const selectedRoomCreatedBy = selectedRoom?.created_by ?? null;
+  const selectedRoomCreator = selectedRoomCreatedBy === user?.id
+    ? profile
+    : selectedRoomCreatedBy ? profiles[selectedRoomCreatedBy] : null;
+  const selectedRoomMemberIds = selectedRoom?.participants || [];
   const selectedRoomAbout = selectedRoom?.type === 'private'
     ? 'A private space for a focused conversation between members.'
     : 'A welcoming community space to share encouragement, questions, and ideas.';
@@ -622,7 +707,8 @@ export default function Chat() {
           {showNewRoom && (
             <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden border-b border-slate-200 dark:border-slate-700">
               <div className="p-4 space-y-3">
-                <input value={roomName} onChange={(e) => setRoomName(e.target.value)} placeholder="Room name" className="input-field py-2 text-sm" />
+                 <input value={roomName} onChange={(e) => setRoomName(e.target.value)} placeholder="Group name" className="input-field py-2 text-sm" />
+                 <textarea value={roomDescription} onChange={(e) => setRoomDescription(e.target.value)} placeholder="Short group description (optional)" maxLength={240} className="input-field min-h-[72px] resize-none py-2 text-sm" />
                 <div className="flex gap-2">
                   <button onClick={() => setRoomType('public')} className={`flex-1 py-2 rounded-lg text-sm font-medium ${roomType === 'public' ? 'bg-primary-600 text-white' : 'glass'}`}>Public</button>
                   <button onClick={() => setRoomType('private')} className={`flex-1 py-2 rounded-lg text-sm font-medium ${roomType === 'private' ? 'bg-primary-600 text-white' : 'glass'}`}>Private</button>
@@ -652,8 +738,8 @@ export default function Chat() {
             filteredRooms.map((room) => (
               <button key={room.id} onClick={() => joinRoom(room)}
                 className={`w-full flex items-center gap-3 p-3 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors text-left ${selectedRoom?.id === room.id ? 'bg-primary-50 dark:bg-primary-900/20' : ''}`}>
-                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary-500 to-gold-500 flex items-center justify-center shrink-0">
-                  {room.type === 'private' ? <Lock className="h-5 w-5 text-white" /> : <span className="text-lg font-bold text-white">{(room.name || 'G').charAt(0).toUpperCase()}</span>}
+                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary-500 to-gold-500 flex items-center justify-center shrink-0 overflow-hidden">
+                  {room.avatar_url ? <img src={room.avatar_url} alt="" className="h-full w-full object-cover" /> : room.type === 'private' ? <Lock className="h-5 w-5 text-white" /> : <span className="text-lg font-bold text-white">{(room.name || 'G').charAt(0).toUpperCase()}</span>}
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="font-semibold text-sm truncate">{room.name}</p>
@@ -678,8 +764,8 @@ export default function Chat() {
               <button onClick={() => setShowMobileChat(false)} className="md:hidden p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800">
                 <ArrowLeft className="h-5 w-5" />
               </button>
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary-500 to-gold-500 flex items-center justify-center relative">
-                {selectedRoom.type === 'private' ? <Lock className="h-5 w-5 text-white" /> : <Hash className="h-5 w-5 text-white" />}
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary-500 to-gold-500 flex items-center justify-center relative overflow-hidden">
+                {selectedRoom.avatar_url ? <img src={selectedRoom.avatar_url} alt="" className="h-full w-full object-cover" /> : selectedRoom.type === 'private' ? <Lock className="h-5 w-5 text-white" /> : <Hash className="h-5 w-5 text-white" />}
               </div>
               <div className="flex-1">
                 <h2 className="font-bold">{selectedRoom.name}</h2>
@@ -692,10 +778,9 @@ export default function Chat() {
                   <Users className="h-3 w-3" /> {selectedRoom.participants?.length || 0} members
                 </p>
               </div>
-              <button type="button" onClick={() => setShowRoomInfo(true)} className="rounded-xl p-2 text-slate-500 transition hover:bg-slate-100 hover:text-slate-900 dark:hover:bg-slate-800 dark:hover:text-white" aria-label="View group information" title="Group information">
+              <button type="button" onClick={openRoomInfo} className="rounded-xl p-2 text-slate-500 transition hover:bg-slate-100 hover:text-slate-900 dark:hover:bg-slate-800 dark:hover:text-white" aria-label="View group information" title="Group information">
                 <Info className="h-5 w-5" />
               </button>
-            </div>
             </div>
 
             {/* Daily limit banner */}
@@ -952,28 +1037,108 @@ export default function Chat() {
                 <div className="relative flex items-start justify-between gap-4">
                   <div className="flex items-center gap-4">
                     <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl border border-white/20 bg-white/15 shadow-lg backdrop-blur">
-                      {selectedRoom.type === 'private' ? <Lock className="h-7 w-7" /> : <span className="text-2xl font-bold">{(selectedRoom.name || 'G').charAt(0).toUpperCase()}</span>}
+                      {selectedRoom.avatar_url ? (
+                        <img src={selectedRoom.avatar_url} alt="" className="h-full w-full rounded-2xl object-cover" />
+                      ) : selectedRoom.type === 'private' ? (
+                        <Lock className="h-7 w-7" />
+                      ) : (
+                        <span className="text-2xl font-bold">{(selectedRoom.name || 'G').charAt(0).toUpperCase()}</span>
+                      )}
                     </div>
                     <div className="min-w-0">
                       <p className="text-xs font-bold uppercase tracking-[0.16em] text-blue-100">{selectedRoom.type === 'private' ? 'Private conversation' : 'Community group'}</p>
                       <h2 className="mt-1 truncate text-2xl font-bold">{selectedRoom.name}</h2>
                     </div>
                   </div>
-                  <button type="button" onClick={() => setShowRoomInfo(false)} className="rounded-xl p-2 text-white/80 transition hover:bg-white/15 hover:text-white" aria-label="Close group information"><X className="h-5 w-5" /></button>
+                  <div className="flex items-center gap-1">
+                    {selectedRoom.type === 'public' && selectedRoom.created_by === user.id && (
+                      <button
+                        type="button"
+                        onClick={() => setEditingRoomProfile(true)}
+                        className="rounded-xl p-2 text-white/80 transition hover:bg-white/15 hover:text-white"
+                        aria-label="Edit group profile"
+                        title="Edit group profile"
+                      >
+                        <Edit2 className="h-5 w-5" />
+                      </button>
+                    )}
+                    <button type="button" onClick={() => setShowRoomInfo(false)} className="rounded-xl p-2 text-white/80 transition hover:bg-white/15 hover:text-white" aria-label="Close group information"><X className="h-5 w-5" /></button>
+                  </div>
                 </div>
               </div>
-              <div className="max-h-[70vh] overflow-y-auto p-6">
-                <div className="grid grid-cols-3 gap-3">
-                  <div className="rounded-2xl bg-slate-50 p-3 text-center dark:bg-slate-800"><Users className="mx-auto h-5 w-5 text-primary-600 dark:text-primary-400" /><p className="mt-2 text-lg font-bold text-slate-900 dark:text-white">{selectedRoom.participants?.length || 0}</p><p className="text-xs text-slate-500 dark:text-slate-400">Members</p></div>
-                  <div className="rounded-2xl bg-slate-50 p-3 text-center dark:bg-slate-800"><span className="mx-auto flex h-5 w-5 items-center justify-center"><span className="h-2.5 w-2.5 rounded-full bg-emerald-500" /></span><p className="mt-2 text-lg font-bold text-slate-900 dark:text-white">{onlineUsers.length}</p><p className="text-xs text-slate-500 dark:text-slate-400">Online now</p></div>
-                  <div className="rounded-2xl bg-slate-50 p-3 text-center dark:bg-slate-800"><ShieldCheck className="mx-auto h-5 w-5 text-primary-600 dark:text-primary-400" /><p className="mt-2 text-sm font-bold capitalize text-slate-900 dark:text-white">{selectedRoom.type}</p><p className="text-xs text-slate-500 dark:text-slate-400">Access</p></div>
+              {editingRoomProfile ? (
+                <div className="max-h-[70vh] overflow-y-auto p-6">
+                  <div className="mb-5 flex items-center justify-between">
+                    <div>
+                      <h3 className="text-lg font-bold text-slate-900 dark:text-white">Edit group profile</h3>
+                      <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Give your group a clear identity for members.</p>
+                    </div>
+                    <button type="button" onClick={() => setEditingRoomProfile(false)} className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800" aria-label="Cancel editing"><X className="h-4 w-4" /></button>
+                  </div>
+                  <div className="flex flex-col items-center gap-3">
+                    <button
+                      type="button"
+                      onClick={() => roomAvatarInputRef.current?.click()}
+                      disabled={uploadingRoomAvatar}
+                      className="group relative flex h-24 w-24 items-center justify-center overflow-hidden rounded-3xl bg-gradient-to-br from-primary-500 to-gold-500 text-white shadow-lg disabled:cursor-wait"
+                      aria-label="Change group image"
+                    >
+                      {roomProfileAvatar ? <img src={roomProfileAvatar} alt="" className="h-full w-full object-cover" /> : <span className="text-3xl font-bold">{(roomProfileName || 'G').charAt(0).toUpperCase()}</span>}
+                      <span className="absolute inset-0 flex items-center justify-center bg-black/45 opacity-0 transition group-hover:opacity-100"><Camera className="h-6 w-6" /></span>
+                    </button>
+                    <input ref={roomAvatarInputRef} type="file" accept="image/*" onChange={handleRoomAvatarUpload} className="hidden" />
+                    <p className="text-xs text-slate-500 dark:text-slate-400">{uploadingRoomAvatar ? 'Uploading image...' : 'Choose a square image, up to 5MB'}</p>
+                  </div>
+                  <div className="mt-6 space-y-4">
+                    <label className="block text-sm font-semibold text-slate-700 dark:text-slate-200">
+                      Group name
+                      <input value={roomProfileName} onChange={(event) => setRoomProfileName(event.target.value)} maxLength={80} className="input-field mt-1.5" />
+                    </label>
+                    <label className="block text-sm font-semibold text-slate-700 dark:text-slate-200">
+                      Description
+                      <textarea value={roomProfileDescription} onChange={(event) => setRoomProfileDescription(event.target.value)} maxLength={240} placeholder="What is this group for?" className="input-field mt-1.5 min-h-[100px] resize-none" />
+                      <span className="mt-1 block text-right text-xs font-normal text-slate-400">{roomProfileDescription.length}/240</span>
+                    </label>
+                  </div>
+                  <div className="mt-6 flex gap-2">
+                    <button type="button" onClick={saveRoomProfile} disabled={savingRoomProfile || uploadingRoomAvatar} className="btn-primary flex-1">
+                      {savingRoomProfile ? <Loader className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+                      {savingRoomProfile ? 'Saving...' : 'Save profile'}
+                    </button>
+                    <button type="button" onClick={() => setEditingRoomProfile(false)} disabled={savingRoomProfile} className="btn-ghost">Cancel</button>
+                  </div>
                 </div>
-                <div className="mt-5 rounded-2xl border border-slate-200 p-4 dark:border-slate-700">
-                  <div className="flex items-start gap-3"><Info className="mt-0.5 h-5 w-5 shrink-0 text-primary-600 dark:text-primary-400" /><div><h3 className="font-bold text-slate-900 dark:text-white">About this group</h3><p className="mt-1 text-sm leading-6 text-slate-600 dark:text-slate-300">{selectedRoomAbout}</p></div></div>
-                  <div className="mt-4 flex flex-wrap gap-x-4 gap-y-2 text-xs text-slate-500 dark:text-slate-400"><span className="inline-flex items-center gap-1.5"><CalendarDays className="h-3.5 w-3.5" /> Created {selectedRoom.created_at ? new Date(selectedRoom.created_at).toLocaleDateString() : 'recently'}</span>{selectedRoomCreator && <span className="inline-flex items-center gap-1.5"><UserRound className="h-3.5 w-3.5" /> By {selectedRoomCreator.username || 'Community member'}</span>}</div>
+              ) : (
+                <div className="max-h-[70vh] overflow-y-auto p-6">
+                  <div className="grid grid-cols-3 gap-3">
+                    <div className="rounded-2xl bg-slate-50 p-3 text-center dark:bg-slate-800"><Users className="mx-auto h-5 w-5 text-primary-600 dark:text-primary-400" /><p className="mt-2 text-lg font-bold text-slate-900 dark:text-white">{selectedRoomMemberIds.length}</p><p className="text-xs text-slate-500 dark:text-slate-400">Members</p></div>
+                    <div className="rounded-2xl bg-slate-50 p-3 text-center dark:bg-slate-800"><span className="mx-auto flex h-5 w-5 items-center justify-center"><span className="h-2.5 w-2.5 rounded-full bg-emerald-500" /></span><p className="mt-2 text-lg font-bold text-slate-900 dark:text-white">{onlineUsers.length}</p><p className="text-xs text-slate-500 dark:text-slate-400">Online now</p></div>
+                    <div className="rounded-2xl bg-slate-50 p-3 text-center dark:bg-slate-800"><ShieldCheck className="mx-auto h-5 w-5 text-primary-600 dark:text-primary-400" /><p className="mt-2 text-sm font-bold capitalize text-slate-900 dark:text-white">{selectedRoom.type}</p><p className="text-xs text-slate-500 dark:text-slate-400">Access</p></div>
+                  </div>
+                  <div className="mt-5 rounded-2xl border border-slate-200 p-4 dark:border-slate-700">
+                    <div className="flex items-start gap-3"><Info className="mt-0.5 h-5 w-5 shrink-0 text-primary-600 dark:text-primary-400" /><div><h3 className="font-bold text-slate-900 dark:text-white">About this group</h3><p className="mt-1 text-sm leading-6 text-slate-600 dark:text-slate-300">{selectedRoom.description?.trim() || selectedRoomAbout}</p></div></div>
+                    <div className="mt-4 flex flex-wrap gap-x-4 gap-y-2 text-xs text-slate-500 dark:text-slate-400"><span className="inline-flex items-center gap-1.5"><CalendarDays className="h-3.5 w-3.5" /> Created {selectedRoom.created_at ? new Date(selectedRoom.created_at).toLocaleDateString() : 'recently'}</span>{selectedRoomCreator && <span className="inline-flex items-center gap-1.5"><UserRound className="h-3.5 w-3.5" /> By {selectedRoomCreator.username || 'Community member'}</span>}</div>
+                  </div>
+                  <div className="mt-5">
+                    <div className="mb-3 flex items-center justify-between"><h3 className="font-bold text-slate-900 dark:text-white">Members</h3><span className="text-xs text-slate-500 dark:text-slate-400">{selectedRoomMemberIds.length} total</span></div>
+                    {selectedRoomMemberIds.length > 0 ? (
+                      <div className="space-y-2">
+                        {selectedRoomMemberIds.slice(0, 8).map((memberId) => {
+                          const member = memberId === user.id ? profile : profiles[memberId];
+                          return (
+                            <div key={memberId} className="flex items-center gap-3 rounded-xl bg-slate-50 p-2.5 dark:bg-slate-800">
+                              {member?.avatar_url ? <img src={member.avatar_url} alt="" className="h-9 w-9 rounded-full object-cover" /> : <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-primary-500 to-gold-500 text-sm font-bold text-white">{(member?.username || '?').charAt(0).toUpperCase()}</div>}
+                              <span className="min-w-0 flex-1 truncate text-sm font-semibold text-slate-700 dark:text-slate-200">{member?.username || 'Community member'}</span>
+                              {memberId === selectedRoomCreatedBy && <span className="text-xs font-semibold text-primary-600 dark:text-primary-400">Creator</span>}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ) : <p className="rounded-xl bg-slate-50 p-4 text-sm text-slate-500 dark:bg-slate-800 dark:text-slate-400">Member profiles will appear here as they join the group.</p>}
+                    {selectedRoomMemberIds.length > 8 && <p className="mt-2 text-center text-xs text-slate-500 dark:text-slate-400">And {selectedRoomMemberIds.length - 8} more members</p>}
+                  </div>
                 </div>
-                <div className="mt-5"><div className="mb-3 flex items-center justify-between"><h3 className="font-bold text-slate-900 dark:text-white">Members</h3><span className="text-xs text-slate-500 dark:text-slate-400">{selectedRoom.participants?.length || 0} total</span></div>{selectedRoomMembers.length > 0 ? <div className="space-y-2">{selectedRoomMembers.slice(0, 6).map((member) => <div key={member.id} className="flex items-center gap-3 rounded-xl bg-slate-50 p-2.5 dark:bg-slate-800">{member.avatar_url ? <img src={member.avatar_url} alt="" className="h-9 w-9 rounded-full object-cover" /> : <div className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-primary-500 to-gold-500 text-sm font-bold text-white">{(member.username || '?').charAt(0).toUpperCase()}</div>}<span className="min-w-0 flex-1 truncate text-sm font-semibold text-slate-700 dark:text-slate-200">{member.username || 'Community member'}</span>{member.id === selectedRoomCreatedBy && <span className="text-xs font-semibold text-primary-600 dark:text-primary-400">Creator</span>}</div>)}</div> : <p className="rounded-xl bg-slate-50 p-4 text-sm text-slate-500 dark:bg-slate-800 dark:text-slate-400">Member profiles will appear here as they join the group.</p>}{selectedRoomMembers.length > 6 && <p className="mt-2 text-center text-xs text-slate-500 dark:text-slate-400">And {selectedRoomMembers.length - 6} more members</p>}</div>
-              </div>
+              )}
             </motion.div>
           </motion.div>
         )}
