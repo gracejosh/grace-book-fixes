@@ -9,15 +9,32 @@ export default async function handler(req, res) {
     return res.status(200).end();
   }
 
+  const isPdf = url.toLowerCase().includes('.pdf');
+
+  const headers = {
+    'User-Agent': 'Mozilla/5.0',
+  };
+  if (isPdf) {
+    headers['Accept'] = 'application/pdf';
+  } else {
+    headers['Accept'] = '*/*';
+  }
+
   try {
-    const response = await fetch(url);
+    const response = await fetch(url, {
+      redirect: 'follow',
+      headers,
+    });
+
     if (!response.ok) {
-      return res.status(response.status).json({ error: 'Download failed' });
+      // Fallback: redirect to Cloudinary directly
+      return res.redirect(url);
     }
 
     const buffer = await response.arrayBuffer();
+    const contentType = response.headers.get('content-type') || (isPdf ? 'application/pdf' : 'application/octet-stream');
 
-    res.setHeader('Content-Type', response.headers.get('content-type') || 'application/octet-stream');
+    res.setHeader('Content-Type', contentType);
     res.setHeader('Content-Disposition', 'attachment');
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
@@ -25,6 +42,7 @@ export default async function handler(req, res) {
 
     return res.send(Buffer.from(buffer));
   } catch (error) {
-    return res.status(500).json({ error: 'Download failed' });
+    // Fallback: redirect to Cloudinary directly
+    return res.redirect(url);
   }
 }
