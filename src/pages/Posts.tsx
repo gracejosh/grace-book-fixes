@@ -7,8 +7,8 @@ import { useToast } from '@/context/ToastContext';
 import type { Post, PostType, Profile } from '@/types';
 import {
   Heart, Share2, Download, FileText, Image as ImageIcon, Headphones,
-  Type, Plus, X, Trash2, Loader, Facebook, Twitter, MessageCircle, Mail,
-  Search, Sparkles,
+  Type, Plus, X, Trash2, Loader, MessageCircle,
+  Search, Sparkles, UserPlus, UserCheck, ChevronRight,
 } from 'lucide-react';
 import { EmptyState } from '@/components/ui';
 
@@ -62,7 +62,12 @@ export default function Posts() {
   const [search, setSearch] = useState('');
   const [likedPosts, setLikedPosts] = useState<Set<string>>(new Set());
   const [showUpload, setShowUpload] = useState(false);
-  const [sharePost, setSharePost] = useState<Post | null>(null);
+  const [previewAuthor, setPreviewAuthor] = useState<Profile | null>(null);
+  const [previewFollowers, setPreviewFollowers] = useState(0);
+  const [previewFollowing, setPreviewFollowing] = useState(0);
+  const [previewIsFollowing, setPreviewIsFollowing] = useState(false);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [downloadProgress, setDownloadProgress] = useState<Record<string, number | 'done'>>({});
 
   const loadPosts = useCallback(async () => {
     setLoading(true);
@@ -79,7 +84,7 @@ export default function Posts() {
     const fetched = (data as Post[]) ?? [];
     setPosts(fetched);
 
-    const authorIds = [...new Set(fetched.map((p) => p.user_id))];
+    const authorIds = [...new Set(fetched.map((p) => p.user_id).filter(Boolean) as string[])];
     if (authorIds.length > 0) {
       const { data: profData } = await supabase
         .from('profiles')
@@ -135,6 +140,55 @@ export default function Posts() {
     }
   }, [user, likedPosts, showToast]);
 
+  const downloadBlob = useCallback(async (url: string, filename: string, progressKey: string) => {
+    setDownloadProgress((prev) => ({ ...prev, [progressKey]: 0 }));
+    try {
+      const response = await fetch(url);
+      if (!response.ok) throw new Error('Download failed');
+      const contentLength = response.headers.get('Content-Length');
+      const total = contentLength ? parseInt(contentLength, 10) : 0;
+      const reader = response.body?.getReader();
+      if (!reader) throw new Error('No response body');
+      const chunks: Uint8Array[] = [];
+      let received = 0;
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        if (value) {
+          chunks.push(value);
+          received += value.length;
+          if (total > 0) {
+            setDownloadProgress((prev) => ({ ...prev, [progressKey]: Math.round((received / total) * 100) }));
+          }
+        }
+      }
+      const blob = new Blob(chunks);
+      const blobUrl = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = blobUrl;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(blobUrl);
+      setDownloadProgress((prev) => ({ ...prev, [progressKey]: 'done' }));
+      setTimeout(() => {
+        setDownloadProgress((prev) => {
+          const next = { ...prev };
+          delete next[progressKey];
+          return next;
+        });
+      }, 3000);
+    } catch {
+      setDownloadProgress((prev) => {
+        const next = { ...prev };
+        delete next[progressKey];
+        return next;
+      });
+      showToast('Download failed', 'error');
+    }
+  }, [showToast]);
+
   const handleDownload = useCallback(async (post: Post) => {
     if (!post.media_url) return;
     if (user) {
@@ -143,15 +197,31 @@ export default function Posts() {
     setPosts((prev) => prev.map((p) =>
       p.id === post.id ? { ...p, downloads_count: p.downloads_count + 1 } : p
     ));
-    const a = document.createElement('a');
-    a.href = post.media_url;
-    a.download = post.file_name || 'download';
-    a.target = '_blank';
-    a.rel = 'noopener noreferrer';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-  }, [user]);
+    downloadBlob(post.media_url, post.file_name || `post-${post.id}`, post.id);
+  }, [user, downloadBlob]);
+
+  const handleImageDownload = useCallback((post: Post) => {
+    if (!post.media_url) return;
+    downloadBlob(post.media_url, post.file_name || `image-${post.id}.jpg`, `img-${post.id}`);
+  }, [downloadBlob]);
+
+  const handleNativeShare = useCallback(async (post: Post) => {
+    const text = post.title || post.content?.slice(0, 100) || 'Check out this post on Grace Book';
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: post.title || 'Grace Book Post', text });
+      } catch {
+        // user cancelled
+      }
+    } else {
+      try {
+        await navigator.clipboard.writeText(text);
+        showToast('Link copied to clipboard', 'success');
+      } catch {
+        showToast('Sharing not supported on this device', 'info');
+      }
+    }
+  }, [showToast]);
 
   const handleDelete = useCallback(async (post: Post) => {
     if (!confirm('Delete this post?')) return;
@@ -166,12 +236,79 @@ export default function Posts() {
 
   const canDelete = (post: Post) => user?.id === post.user_id || profile?.is_admin;
 
-  const shareUrl = (post: Post) => encodeURIComponent(
-    `${post.title || post.content || 'Check out this post'} via Grace Book`
-  );
-  const shareText = (post: Post) => encodeURIComponent(
-    post.title || post.content || 'Check out this post on Grace Book'
-  );
+  const openAuthorPreview = useCallback(async (authorId?: string) => {
+    if (!authorId) return;
+    const author = authors[authorId];
+    if (!author) return;
+    setPreviewAuthor(author);
+    setPreviewFollowers(0);
+    setPreviewFollowing(0);
+    setPreviewIsFollowing(false);
+    setPreviewLoading(true);
+
+    const [followersRes, followingRes, isFollowingRes] = await Promise.all([
+      supabase.from('follows').select('id', { count: 'exact', head: true }).eq('following_id', authorId),
+      supabase.from('follows').select('id', { count: 'exact', head: true }).eq('follower_id', authorId),
+      user ? supabase.from('follows').select('id').eq('follower_id', user.id).eq('following_id', authorId).maybeSingle() : Promise.resolve({ data: null }),
+    ]);
+
+    setPreviewFollowers(followersRes.count ?? 0);
+    setPreviewFollowing(followingRes.count ?? 0);
+    setPreviewIsFollowing(!!isFollowingRes.data);
+    setPreviewLoading(false);
+  }, [authors, user]);
+
+  const toggleFollow = useCallback(async () => {
+    if (!user || !previewAuthor) return;
+    if (previewIsFollowing) {
+      await supabase.from('follows').delete().eq('follower_id', user.id).eq('following_id', previewAuthor.id);
+      setPreviewIsFollowing(false);
+      setPreviewFollowers((prev) => Math.max(0, prev - 1));
+    } else {
+      await supabase.from('follows').insert({ follower_id: user.id, following_id: previewAuthor.id });
+      setPreviewIsFollowing(true);
+      setPreviewFollowers((prev) => prev + 1);
+    }
+  }, [user, previewAuthor, previewIsFollowing]);
+
+  const startDirectMessage = useCallback(async (targetUser: Profile) => {
+    if (!user || !targetUser.id || targetUser.id === user.id) return;
+    try {
+      const { data: privateRooms } = await supabase
+        .from('chat_rooms')
+        .select('*')
+        .eq('type', 'private')
+        .eq('is_active', true)
+        .contains('participants', [user.id, targetUser.id]);
+
+      const existingRoom = ((privateRooms as { id: string; participants: string[] }[] | null) ?? []).find((room) => {
+        const participants = room.participants || [];
+        return participants.length === 2 && participants.includes(user.id) && participants.includes(targetUser.id);
+      });
+
+      if (existingRoom) {
+        navigate(`/chat?room=${existingRoom.id}`);
+        return;
+      }
+
+      const { data: newRoom, error } = await supabase
+        .from('chat_rooms')
+        .insert({
+          name: 'Chat with ' + (targetUser.username || 'user'),
+          type: 'private',
+          created_by: user.id,
+          participants: [user.id, targetUser.id],
+          is_active: true,
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+      navigate(`/chat?room=${newRoom.id}`);
+    } catch {
+      showToast('Could not start conversation', 'error');
+    }
+  }, [user, navigate, showToast]);
 
   return (
     <div className="min-h-screen">
@@ -262,6 +399,8 @@ export default function Posts() {
                 const author = post.user_id ? authors[post.user_id] : undefined;
                 const Icon = typeIcon(post.type);
                 const isLiked = likedPosts.has(post.id);
+                const dlProgress = downloadProgress[post.id];
+                const imgDlProgress = downloadProgress[`img-${post.id}`];
                 return (
                   <motion.div
                     key={post.id}
@@ -279,6 +418,19 @@ export default function Posts() {
                           className="w-full object-cover group-hover:scale-105 transition-transform duration-500"
                           loading="lazy"
                         />
+                        <button
+                          onClick={() => handleImageDownload(post)}
+                          disabled={imgDlProgress !== undefined}
+                          className="absolute bottom-2 right-2 flex items-center gap-1.5 rounded-lg bg-black/60 backdrop-blur-sm px-3 py-1.5 text-xs font-medium text-white transition hover:bg-black/80 disabled:opacity-70"
+                        >
+                          {imgDlProgress === 'done' ? (
+                            <><Download className="h-3.5 w-3.5" /> Downloaded ✓</>
+                          ) : typeof imgDlProgress === 'number' ? (
+                            <><Loader className="h-3.5 w-3.5 animate-spin" /> {imgDlProgress}%</>
+                          ) : (
+                            <><Download className="h-3.5 w-3.5" /> Download</>
+                          )}
+                        </button>
                       </div>
                     )}
 
@@ -339,15 +491,24 @@ export default function Posts() {
 
                       {/* Author */}
                       <div className="flex items-center gap-2 mb-3">
-                        <div onClick={() => openAuthorProfile(author?.id)} className="w-7 h-7 rounded-lg bg-gradient-to-br from-primary-400 to-gold-400 flex items-center justify-center text-white text-xs font-bold overflow-hidden">
+                        <button
+                          onClick={() => openAuthorPreview(author?.id)}
+                          className="w-7 h-7 rounded-lg bg-gradient-to-br from-primary-400 to-gold-400 flex items-center justify-center text-white text-xs font-bold overflow-hidden transition hover:ring-2 hover:ring-primary-400"
+                          aria-label="View author profile"
+                        >
                           {author?.avatar_url ? (
                             <img src={author.avatar_url} alt="" className="w-full h-full object-cover" />
                           ) : (
                             author?.username?.charAt(0).toUpperCase() || '?'
                           )}
-                        </div>
+                        </button>
                         <div className="flex-1 min-w-0">
-                          <p onClick={() => openAuthorProfile(author?.id)} className="text-xs font-medium truncate">{author?.username || 'Unknown'}</p>
+                          <button
+                            onClick={() => openAuthorPreview(author?.id)}
+                            className="text-xs font-medium truncate hover:text-primary-600 transition"
+                          >
+                            {author?.username || 'Unknown'}
+                          </button>
                           <p className="text-xs text-slate-400">{timeAgo(post.created_at)}</p>
                         </div>
                       </div>
@@ -369,15 +530,21 @@ export default function Posts() {
                         {(post.type === 'pdf' || post.type === 'audio') && post.media_url && (
                           <button
                             onClick={() => handleDownload(post)}
-                            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700 transition-all"
+                            disabled={dlProgress !== undefined}
+                            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700 transition-all disabled:opacity-70"
                           >
-                            <Download className="h-4 w-4" />
-                            {post.downloads_count > 0 && post.downloads_count}
+                            {dlProgress === 'done' ? (
+                              <><Download className="h-4 w-4" /> Downloaded ✓</>
+                            ) : typeof dlProgress === 'number' ? (
+                              <><Loader className="h-4 w-4 animate-spin" /> {dlProgress}%</>
+                            ) : (
+                              <><Download className="h-4 w-4" /> {post.downloads_count > 0 && post.downloads_count}</>
+                            )}
                           </button>
                         )}
 
                         <button
-                          onClick={() => setSharePost(post)}
+                          onClick={() => handleNativeShare(post)}
                           className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700 transition-all ml-auto"
                         >
                           <Share2 className="h-4 w-4" />
@@ -403,45 +570,93 @@ export default function Posts() {
         )}
       </AnimatePresence>
 
-      {/* Share Modal */}
+      {/* Author Preview Popup */}
       <AnimatePresence>
-        {sharePost && (
+        {previewAuthor && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            onClick={() => setSharePost(null)}
-            className="fixed inset-0 z-[9999] bg-black/50 backdrop-blur-sm flex items-center justify-center p-4"
+            onClick={() => setPreviewAuthor(null)}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
           >
             <motion.div
-              initial={{ scale: 0.9, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.9, opacity: 0 }}
+              initial={{ opacity: 0, scale: 0.96, y: 8 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.96, y: 8 }}
+              transition={{ duration: 0.18 }}
+              role="dialog"
+              aria-modal="true"
+              aria-label={previewAuthor.username || 'User profile'}
+              className="w-full max-w-sm overflow-hidden rounded-2xl bg-white shadow-2xl dark:bg-slate-900"
               onClick={(e) => e.stopPropagation()}
-              className="glass-card p-6 max-w-md w-full"
             >
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-xl font-bold">Share This Post</h3>
-                <button onClick={() => setSharePost(null)} className="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700">
+              <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4 dark:border-slate-700">
+                <h2 className="text-lg font-bold">User profile</h2>
+                <button
+                  type="button"
+                  onClick={() => setPreviewAuthor(null)}
+                  className="rounded-lg p-2 text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-900 dark:hover:bg-slate-800 dark:hover:text-white"
+                  aria-label="Close user profile"
+                >
                   <X className="h-5 w-5" />
                 </button>
               </div>
-              <p className="text-sm text-slate-600 dark:text-slate-300 mb-4 italic">
-                {sharePost.title || sharePost.content?.slice(0, 100) || 'Grace Book Post'}
-              </p>
-              <div className="grid grid-cols-2 gap-3">
-                <a href={`https://www.facebook.com/sharer/sharer.php?u=${shareUrl(sharePost)}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 p-3 rounded-xl bg-blue-600 text-white font-medium hover:scale-105 transition-transform">
-                  <Facebook className="h-5 w-5" /> Facebook
-                </a>
-                <a href={`https://twitter.com/intent/tweet?text=${shareText(sharePost)}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 p-3 rounded-xl bg-sky-500 text-white font-medium hover:scale-105 transition-transform">
-                  <Twitter className="h-5 w-5" /> Twitter
-                </a>
-                <a href={`https://wa.me/?text=${shareText(sharePost)}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 p-3 rounded-xl bg-green-500 text-white font-medium hover:scale-105 transition-transform">
-                  <MessageCircle className="h-5 w-5" /> WhatsApp
-                </a>
-                <a href={`mailto:?subject=Check out this post&body=${shareText(sharePost)}`} className="flex items-center gap-2 p-3 rounded-xl bg-slate-600 text-white font-medium hover:scale-105 transition-transform">
-                  <Mail className="h-5 w-5" /> Email
-                </a>
+              <div className="p-6 text-center">
+                {previewAuthor.avatar_url ? (
+                  <img src={previewAuthor.avatar_url} alt="" className="mx-auto h-24 w-24 rounded-full object-cover ring-4 ring-primary-100 dark:ring-primary-900/40" />
+                ) : (
+                  <div className="mx-auto flex h-24 w-24 items-center justify-center rounded-full bg-gradient-to-br from-primary-500 to-gold-500 text-3xl font-bold text-white">
+                    {(previewAuthor.username || '?').charAt(0).toUpperCase()}
+                  </div>
+                )}
+                <h3 className="mt-4 text-xl font-bold">{previewAuthor.username || 'Unnamed user'}</h3>
+                <p className="mt-1 text-sm text-slate-500 dark:text-slate-400 line-clamp-2">{previewAuthor.bio || 'Community member'}</p>
+
+                {previewLoading ? (
+                  <div className="mt-3 flex items-center justify-center gap-2 text-sm text-slate-400">
+                    <Loader className="h-4 w-4 animate-spin" /> Loading...
+                  </div>
+                ) : (
+                  <div className="mt-3 flex items-center justify-center gap-4 text-sm">
+                    <span className="font-semibold">{previewFollowers} <span className="text-slate-400 font-normal">Followers</span></span>
+                    <span className="font-semibold">{previewFollowing} <span className="text-slate-400 font-normal">Following</span></span>
+                  </div>
+                )}
+
+                <div className="mt-5 flex flex-col gap-2">
+                  {user && user.id !== previewAuthor.id && (
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={toggleFollow}
+                        disabled={previewLoading}
+                        className={`flex-1 inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition disabled:opacity-70 ${
+                          previewIsFollowing
+                            ? 'bg-slate-200 text-slate-700 hover:bg-slate-300 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700'
+                            : 'bg-primary-600 text-white hover:bg-primary-700'
+                        }`}
+                      >
+                        {previewIsFollowing ? <UserCheck className="h-4 w-4" /> : <UserPlus className="h-4 w-4" />}
+                        {previewIsFollowing ? 'Following' : 'Follow'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => { startDirectMessage(previewAuthor); setPreviewAuthor(null); }}
+                        className="flex-1 inline-flex items-center justify-center gap-2 rounded-xl bg-slate-100 px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
+                      >
+                        <MessageCircle className="h-4 w-4" /> Message
+                      </button>
+                    </div>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => { openAuthorProfile(previewAuthor.id); setPreviewAuthor(null); }}
+                    className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-medium text-slate-600 transition hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+                  >
+                    See More <ChevronRight className="h-4 w-4" />
+                  </button>
+                </div>
               </div>
             </motion.div>
           </motion.div>
