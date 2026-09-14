@@ -140,10 +140,13 @@ export default function Posts() {
     }
   }, [user, likedPosts, showToast]);
 
-  const downloadBlob = useCallback(async (url: string, filename: string, progressKey: string) => {
+  const downloadBlob = useCallback(async (url: string, filename: string, progressKey: string, forceAttachment = false) => {
     setDownloadProgress((prev) => ({ ...prev, [progressKey]: 0 }));
     try {
-      const proxyUrl = `/api/download?url=${encodeURIComponent(url)}`;
+      const downloadUrl = forceAttachment
+        ? url.replace('/raw/upload/', '/raw/upload/fl_attachment/')
+        : url;
+      const proxyUrl = `/api/download?url=${encodeURIComponent(downloadUrl)}`;
       const response = await fetch(proxyUrl);
       if (!response.ok) throw new Error('Download failed');
       const contentLength = response.headers.get('Content-Length');
@@ -201,7 +204,7 @@ export default function Posts() {
     setPosts((prev) => prev.map((p) =>
       p.id === post.id ? { ...p, downloads_count: p.downloads_count + 1 } : p
     ));
-    downloadBlob(post.media_url, post.file_name || `post-${post.id}`, post.id);
+    downloadBlob(post.media_url, post.file_name || `post-${post.id}`, post.id, post.type === 'pdf');
   }, [user, downloadBlob]);
 
   const handleImageDownload = useCallback((post: Post) => {
