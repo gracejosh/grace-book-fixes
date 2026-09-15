@@ -25,6 +25,7 @@ import Live from '@/pages/Live';
 import Notebook from '@/pages/Notebook';
 import Bible from '@/pages/Bible';
 import NotFound from '@/pages/NotFound';
+import Donate from '@/pages/Donate';
 
 export default function App() {
   useEffect(() => {
@@ -48,6 +49,7 @@ export default function App() {
                       <Route path="/" element={<Home />} />
                       <Route path="/posts" element={<Posts />} />
                       <Route path="/books" element={<Books />} />
+                      <Route path="/donate" element={<Donate />} />
                       <Route path="/courses" element={<Courses />} />
                       <Route path="/quiz" element={<Quiz />} />
                       <Route path="/chat" element={<Chat />} />
