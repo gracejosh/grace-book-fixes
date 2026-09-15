@@ -1,4 +1,4 @@
-const VERSION = 'v2';
+const VERSION = 'v3';
 const PRECACHE_CACHE = `grace-book-precache-${VERSION}`;
 const RUNTIME_CACHE = `grace-book-runtime-${VERSION}`;
 const IMAGE_CACHE = `grace-book-images-${VERSION}`;
