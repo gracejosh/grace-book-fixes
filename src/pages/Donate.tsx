@@ -35,10 +35,13 @@ export default function Donate() {
   return (
     <div className="min-h-full bg-gradient-to-b from-primary-50 via-white to-gold-50/60 px-4 py-8 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950 sm:px-6 lg:px-8">
       <div className="mx-auto max-w-6xl">
-        <section className="relative isolate overflow-hidden rounded-3xl bg-slate-900 px-6 py-10 text-white shadow-xl sm:px-10 sm:py-14">
-          <img src={TELEBIRR_BANNER_URL} alt="" aria-hidden="true" className="absolute inset-0 h-full w-full object-cover opacity-30" loading="eager" />
-          <div className="absolute inset-0 bg-gradient-to-r from-primary-950/90 via-primary-800/75 to-gold-700/60" />
-          <div className="relative max-w-2xl">
+        <section className="relative isolate overflow-hidden rounded-3xl bg-gradient-to-br from-primary-700 via-primary-600 to-gold-500 px-6 py-10 text-white shadow-xl sm:px-10 sm:py-14">
+          <div className="absolute inset-x-0 top-0 h-36 overflow-hidden sm:h-48">
+            <img src={TELEBIRR_BANNER_URL} alt="Telebirr banner" className="h-full w-full object-cover opacity-95" loading="eager" />
+            <div className="absolute inset-0 bg-gradient-to-b from-slate-950/10 via-primary-900/30 to-primary-700/95" />
+          </div>
+          <div className="absolute inset-0 bg-gradient-to-b from-transparent via-primary-700/20 to-primary-700/90" />
+          <div className="relative z-10 pt-36 sm:pt-44">
             <div className="mb-5 inline-flex items-center gap-2 rounded-full bg-white/15 px-3 py-1.5 text-sm font-semibold backdrop-blur-sm">
               <Heart className="h-4 w-4 fill-current" /> Support Grace Book
             </div>
@@ -53,12 +56,12 @@ export default function Donate() {
         <section className="mt-8 grid gap-5 md:grid-cols-2 lg:grid-cols-3">
           <article className="rounded-3xl border border-primary-100 bg-white p-6 shadow-lg shadow-primary-100/50 dark:border-slate-700 dark:bg-slate-800 dark:shadow-none">
             <div className="flex items-center gap-4">
-              <div className="flex h-16 w-16 items-center justify-center overflow-hidden rounded-2xl bg-slate-50 p-2 dark:bg-slate-700">
+              <div className="flex h-24 w-24 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-white p-1.5 shadow-md ring-4 ring-primary-100 dark:bg-slate-700 dark:ring-primary-900/50">
                 <img src={TELEBIRR_LOGO_URL} alt="Telebirr logo" className="h-full w-full object-contain" loading="lazy" />
               </div>
               <div>
-                <p className="text-sm font-semibold text-primary-600 dark:text-primary-300">Telebirr</p>
-                <h2 className="mt-1 text-xl font-bold text-slate-900 dark:text-white">Send via Telebirr</h2>
+                <p className="text-base font-black uppercase tracking-wide text-primary-700 dark:text-primary-300">Telebirr</p>
+                <h2 className="mt-1 text-2xl font-black text-slate-900 dark:text-white">Send via Telebirr</h2>
               </div>
             </div>
             <p className="mt-6 text-sm leading-6 text-slate-600 dark:text-slate-300">Use this number in Telebirr to send your contribution.</p>
