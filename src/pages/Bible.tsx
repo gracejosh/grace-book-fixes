@@ -256,6 +256,7 @@ export default function Bible() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const chapterMemory = useRef<Record<string, Chapter>>({});
+  const verseTapRef = useRef<{ key: string; timer: ReturnType<typeof setTimeout> } | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -318,6 +319,10 @@ export default function Bible() {
     return () => { cancelled = true; clearTimeout(timer); };
   }, [selectedBook, selectedChapterNumber]);
 
+  useEffect(() => () => {
+    if (verseTapRef.current) clearTimeout(verseTapRef.current.timer);
+  }, []);
+
   useEffect(() => { safeWrite(LANGUAGE_KEY, language); }, [language]);
   useEffect(() => { safeWrite(BOOKMARKS_KEY, bookmarks); }, [bookmarks]);
   useEffect(() => { safeWrite(HIGHLIGHTS_KEY, highlights); }, [highlights]);
@@ -363,8 +368,20 @@ export default function Bible() {
   };
 
   const handleVerseTap = (verseKey: string) => {
-    setSelectedVerseKey((prev) => (prev === verseKey ? null : verseKey));
-    setShowHighlightPicker(false);
+    const pendingTap = verseTapRef.current;
+    if (pendingTap?.key === verseKey) {
+      clearTimeout(pendingTap.timer);
+      verseTapRef.current = null;
+      setSelectedVerseKey(verseKey);
+      setShowHighlightPicker(false);
+      return;
+    }
+
+    if (pendingTap) clearTimeout(pendingTap.timer);
+    const timer = setTimeout(() => {
+      verseTapRef.current = null;
+    }, 300);
+    verseTapRef.current = { key: verseKey, timer };
   };
 
   const handleCopy = (verseKey: string) => {
