@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, useLocation } from 'react-router-dom';
 import { useEffect } from 'react';
 import { ThemeProvider } from '@/context/ThemeContext';
 import { AuthProvider } from '@/context/AuthContext';
@@ -26,6 +26,11 @@ import Notebook from '@/pages/Notebook';
 import Bible from '@/pages/Bible';
 import NotFound from '@/pages/NotFound';
 import Donate from '@/pages/Donate';
+
+function RouteAwareAdPopup() {
+  const location = useLocation();
+  return location.pathname === "/bible" ? null : <AdPopup />;
+}
 
 export default function App() {
   useEffect(() => {
@@ -66,7 +71,7 @@ export default function App() {
                       <Route path="*" element={<NotFound />} />
                     </Routes>
                   </main>
-                  <AdPopup />
+                  <RouteAwareAdPopup />
                 </div>
               </BrowserRouter>
             </ToastProvider>
