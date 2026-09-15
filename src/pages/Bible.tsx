@@ -76,6 +76,8 @@ const BOOKMARKS_KEY = "bible:bookmarks";
 const HIGHLIGHTS_KEY = "bible:highlights";
 const LANGUAGE_KEY = "bible:language";
 
+const MATTHEW_28_COMBINED_VERSE = "እንግዲህ ሂዱና አሕዛብን ሁሉ በአብ በወልድና በመንፈስ ቅዱስ ስም እያጠመቃችኋቸው፥ ያዘዝኋችሁንም ሁሉ እንዲጠብቁ እያስተማራችኋቸው ደቀ መዛሙርት አድርጓቸው፤ እነሆም እኔ እስከ ዓለም ፍጻሜ ድረስ ሁልጊዜ ከእናንተ ጋር ነኝ።";
+
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
@@ -140,9 +142,11 @@ const getVerseText = (rawVerse: unknown): string => {
   return asText(firstValue(rawVerse, ["text", "verse", "content", "value", "line"]));
 };
 
+const isPlaceholderVerseText = (text: string) => text.trim() === "" || text.trim() === "-";
+
 const normalizeVerseNumber = (value: unknown, fallback: number): string => {
   const text = asText(value).replace(/\s+/g, "");
-  return /^\d+$/.test(text) ? text : String(fallback);
+  return /^\d+(?:[-–]\d+)?$/.test(text) ? text : String(fallback);
 };
 
 const normalizeChapter = (rawChapter: unknown, chapterIndex: number): Chapter => {
@@ -152,20 +156,32 @@ const normalizeChapter = (rawChapter: unknown, chapterIndex: number): Chapter =>
     chapterIndex + 1,
   );
 
-  const verses = getRawVerses(rawChapter)
-    .map((rawVerse) => {
-      const verseRecord = isRecord(rawVerse) ? rawVerse : {};
-      const explicitNumber = firstValue(verseRecord, ["number", "verseNumber", "id", "label"]);
-      return {
-        sourceNumber: explicitNumber ?? verseRecord.__key,
-        text: getVerseText(rawVerse),
-      };
-    })
-    .filter((verse) => verse.text.length > 0)
-    .map((verse, verseIndex): Verse => ({
-      number: normalizeVerseNumber(verse.sourceNumber, verseIndex + 1),
-      text: verse.text,
-    }));
+  const rawVerses = getRawVerses(rawChapter);
+  const verses: Verse[] = [];
+  rawVerses.forEach((rawVerse, verseIndex) => {
+    const text = getVerseText(rawVerse);
+    if (isPlaceholderVerseText(text)) return;
+
+    const verseRecord = isRecord(rawVerse) ? rawVerse : {};
+    const explicitNumber = firstValue(verseRecord, ["number", "verseNumber", "id", "label"]);
+    let sourceNumber = explicitNumber ?? verseRecord.__key;
+
+    if (sourceNumber === undefined) {
+      let rangeStart = verseIndex + 1;
+      for (let previousIndex = verseIndex - 1; previousIndex >= 0; previousIndex -= 1) {
+        if (!isPlaceholderVerseText(getVerseText(rawVerses[previousIndex]))) break;
+        rangeStart = previousIndex + 1;
+      }
+      sourceNumber = rangeStart === verseIndex + 1
+        ? String(verseIndex + 1)
+        : String(rangeStart) + "–" + String(verseIndex + 1);
+    }
+
+    verses.push({
+      number: normalizeVerseNumber(sourceNumber, verseIndex + 1),
+      text,
+    });
+  });
 
   return {
     number: chapterNumber,
@@ -180,6 +196,15 @@ const normalizeChapter = (rawChapter: unknown, chapterIndex: number): Chapter =>
 const slugify = (value: string) =>
   value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
 
+const repairKnownMissingVerses = (rawChapter: unknown, englishName: string, chapterNumber: number): unknown => {
+  if (englishName !== "Matthew" || chapterNumber !== 28 || !isRecord(rawChapter)) return rawChapter;
+  const verses = rawChapter.verses;
+  if (!Array.isArray(verses) || verses.length !== 19 || !isPlaceholderVerseText(getVerseText(verses[18]))) {
+    return rawChapter;
+  }
+  return { ...rawChapter, verses: [...verses, MATTHEW_28_COMBINED_VERSE] };
+};
+
 const normalizeBooks = (data: unknown): Book[] => {
   const rawBooks = getRawBooks(data);
   return rawBooks
@@ -188,7 +213,9 @@ const normalizeBooks = (data: unknown): Book[] => {
       const amharicName = asText(firstValue(bookRecord, ["title", "name", "book", "bookName"])) || `Book ${bookIndex + 1}`;
       const englishName = ENGLISH_BOOK_NAMES[bookIndex] || `Book ${bookIndex + 1}`;
       const testament: "old" | "new" = bookIndex < 39 ? "old" : "new";
-      const rawChapters = getRawChapters(rawBook);
+      const rawChapters = getRawChapters(rawBook).map((rawChapter, chapterIndex) =>
+        repairKnownMissingVerses(rawChapter, englishName, chapterIndex + 1),
+      );
       const chapterEntries = rawChapters
         .map((rawChapter, chapterIndex) => {
           const chapterRecord = isRecord(rawChapter) ? rawChapter : {};
