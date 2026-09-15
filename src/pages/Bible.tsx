@@ -3,7 +3,7 @@ import type { TouchEvent } from "react";
 
 type Language = "amharic" | "english";
 
-type HighlightColor = "yellow" | "green" | "blue" | "pink" | "orange";
+type HighlightColor = "red" | "white" | "blue";
 
 interface Verse {
   number: string;
@@ -55,27 +55,21 @@ const ENGLISH_BOOK_NAMES = [
 ];
 
 const HIGHLIGHT_COLORS: { id: HighlightColor; label: string; hex: string; bg: string }[] = [
-  { id: "yellow", label: "Yellow", hex: "#EAB308", bg: "rgba(234, 179, 8, 0.22)" },
-  { id: "green", label: "Green", hex: "#22C55E", bg: "rgba(34, 197, 94, 0.22)" },
-  { id: "blue", label: "Blue", hex: "#3B82F6", bg: "rgba(59, 130, 246, 0.22)" },
-  { id: "pink", label: "Pink", hex: "#EC4899", bg: "rgba(236, 72, 153, 0.22)" },
-  { id: "orange", label: "Orange", hex: "#F97316", bg: "rgba(249, 115, 22, 0.22)" },
+  { id: "red", label: "Red", hex: "#EF4444", bg: "rgba(239, 68, 68, 0.28)" },
+  { id: "white", label: "White", hex: "#FFFFFF", bg: "rgba(255, 255, 255, 0.28)" },
+  { id: "blue", label: "Blue", hex: "#3B82F6", bg: "rgba(59, 130, 246, 0.28)" },
 ];
 
 const HIGHLIGHT_BG: Record<HighlightColor, string> = {
-  yellow: "rgba(234, 179, 8, 0.22)",
-  green: "rgba(34, 197, 94, 0.22)",
-  blue: "rgba(59, 130, 246, 0.22)",
-  pink: "rgba(236, 72, 153, 0.22)",
-  orange: "rgba(249, 115, 22, 0.22)",
+  red: "rgba(239, 68, 68, 0.28)",
+  white: "rgba(255, 255, 255, 0.28)",
+  blue: "rgba(59, 130, 246, 0.28)",
 };
 
 const HIGHLIGHT_HEX: Record<HighlightColor, string> = {
-  yellow: "#EAB308",
-  green: "#22C55E",
+  red: "#EF4444",
+  white: "#FFFFFF",
   blue: "#3B82F6",
-  pink: "#EC4899",
-  orange: "#F97316",
 };
 
 const BOOKMARKS_KEY = "bible:bookmarks";
@@ -140,9 +134,15 @@ const getRawVerses = (chapter: unknown): unknown[] => {
   return [];
 };
 
+const getVerseText = (rawVerse: unknown): string => {
+  if (typeof rawVerse === "string") return rawVerse.trim();
+  if (!isRecord(rawVerse)) return "";
+  return asText(firstValue(rawVerse, ["text", "verse", "content", "value", "line"]));
+};
+
 const normalizeVerseNumber = (value: unknown, fallback: number): string => {
   const text = asText(value).replace(/\s+/g, "");
-  return text || String(fallback);
+  return /^\d+$/.test(text) ? text : String(fallback);
 };
 
 const normalizeChapter = (rawChapter: unknown, chapterIndex: number): Chapter => {
@@ -153,19 +153,19 @@ const normalizeChapter = (rawChapter: unknown, chapterIndex: number): Chapter =>
   );
 
   const verses = getRawVerses(rawChapter)
-    .map((rawVerse, verseIndex): Verse => {
+    .map((rawVerse) => {
       const verseRecord = isRecord(rawVerse) ? rawVerse : {};
-      const text =
-        typeof rawVerse === "string"
-          ? rawVerse.trim()
-          : asText(firstValue(verseRecord, ["text", "verse", "content", "value", "line"]));
-      const number = normalizeVerseNumber(
-        firstValue(verseRecord, ["number", "verseNumber", "id", "label"]) || verseRecord.__key,
-        verseIndex + 1,
-      );
-      return { number, text };
+      const explicitNumber = firstValue(verseRecord, ["number", "verseNumber", "id", "label"]);
+      return {
+        sourceNumber: explicitNumber ?? verseRecord.__key,
+        text: getVerseText(rawVerse),
+      };
     })
-    .filter((v) => v.text.length > 0 || v.number.length > 0);
+    .filter((verse) => verse.text.length > 0)
+    .map((verse, verseIndex): Verse => ({
+      number: normalizeVerseNumber(verse.sourceNumber, verseIndex + 1),
+      text: verse.text,
+    }));
 
   return {
     number: chapterNumber,
@@ -870,12 +870,19 @@ function BibleStyles() {
       }
 
       .bible-verse-num {
+        display: inline-flex;
         flex: 0 0 auto;
-        min-width: 28px;
-        padding-top: 3px;
+        align-items: center;
+        justify-content: center;
+        min-width: 32px;
+        min-height: 28px;
+        padding: 0 6px;
+        border-radius: 999px;
+        background: rgba(59, 130, 246, 0.18);
+        color: #FFFFFF;
         font-size: 13px;
-        font-weight: 700;
-        color: var(--bible-gold);
+        font-weight: 800;
+        line-height: 1;
         font-variant-numeric: tabular-nums;
       }
 
@@ -981,6 +988,7 @@ function BibleStyles() {
 
       .bible-highlight-dot.is-active {
         border: 3px solid #fff;
+        box-shadow: 0 0 0 2px var(--bible-purple);
       }
 
       /* Right drawer */
