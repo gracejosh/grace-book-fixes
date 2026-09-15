@@ -26,6 +26,7 @@ import Notebook from '@/pages/Notebook';
 import Bible from '@/pages/Bible';
 import NotFound from '@/pages/NotFound';
 import Donate from '@/pages/Donate';
+import Followers from '@/pages/Followers';
 
 function RouteAwareAdPopup() {
   const location = useLocation();
@@ -59,6 +60,8 @@ export default function App() {
                       <Route path="/quiz" element={<Quiz />} />
                       <Route path="/chat" element={<Chat />} />
                       <Route path="/profile" element={<Profile />} />
+                      <Route path="/followers" element={<Followers type="followers" />} />
+                      <Route path="/following" element={<Followers type="following" />} />
                       <Route path="/admin" element={<Admin />} />
                       <Route path="/about" element={<About />} />
                       <Route path="/flyers" element={<Flyers />} />
@@ -80,4 +83,3 @@ export default function App() {
       </ThemeProvider>
     </ErrorBoundary>
   );
-}

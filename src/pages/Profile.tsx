@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useLocation, Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { supabase, uploadToCloudinary } from '@/lib/supabase';
 import { useAuth } from '@/context/AuthContext';
@@ -384,8 +384,8 @@ function ProfileDashboard({ user, profile, viewedProfileKey, showToast, signOut,
               </div>
               {isOwnProfile && (
                 <label className="absolute -bottom-2 -right-2 w-8 h-8 rounded-xl bg-primary-600 text-white flex items-center justify-center cursor-pointer hover:scale-110 transition-transform shadow-lg">
-                <Camera className="h-4 w-4" />
-                  <input type="file" accept="image/*" onChange={handleAvatarUpload} className="hidden" />
+                  <Camera className="h-4 w-4" />
+                    <input type="file" accept="image/*" onChange={handleAvatarUpload} className="hidden" />
                 </label>
               )}
               {uploading && <div className="absolute inset-0 rounded-2xl bg-black/50 flex items-center justify-center"><div className="skeleton h-8 w-8 rounded-full" /></div>}
@@ -462,8 +462,12 @@ function ProfileDashboard({ user, profile, viewedProfileKey, showToast, signOut,
                   {viewedProfile?.bio && <p className="text-sm text-slate-600 dark:text-slate-300 mb-3 max-w-md">{viewedProfile.bio}</p>}
                   <p className="text-xs text-slate-400">Member since {new Date(viewedProfile?.created_at ?? Date.now()).toLocaleDateString()}</p>
                   <div className="flex gap-4 mt-3 text-sm text-slate-500 dark:text-slate-400">
-                    <span><strong className="text-slate-700 dark:text-slate-200">{followCounts.followers}</strong> Followers</span>
-                    <span><strong className="text-slate-700 dark:text-slate-200">{followCounts.following}</strong> Following</span>
+                    <Link to="/followers" className="hover:text-primary-600 dark:hover:text-primary-400 transition-colors duration-200 cursor-pointer">
+                      <strong className="text-slate-700 dark:text-slate-200">{followCounts.followers}</strong> Followers
+                    </Link>
+                    <Link to="/following" className="hover:text-primary-600 dark:hover:text-primary-400 transition-colors duration-200 cursor-pointer">
+                      <strong className="text-slate-700 dark:text-slate-200">{followCounts.following}</strong> Following
+                    </Link>
                   </div>
                   <div className="flex gap-2 mt-4 justify-center sm:justify-start">
                     {isOwnProfile ? (
