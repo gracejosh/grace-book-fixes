@@ -3,20 +3,32 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { supabase, uploadToCloudinary } from '@/lib/supabase';
 import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/context/ToastContext';
-import type { Blog, BlogComment, Profile } from '@/types';
+import type { Blog, Profile } from '@/types';
 import { Newspaper, Heart, Share2, Upload, X, MessageCircle, Send, Play, Image as ImageIcon, Video } from 'lucide-react';
 import { SkeletonCard, EmptyState } from '@/components/ui';
 
 const categories = ['All', 'Devotional', 'Theology', 'Testimony', 'News', 'General'];
 
+interface BlogRecord extends Blog {
+  video_url: string | null;
+}
+
+interface BlogComment {
+  id: string;
+  blog_id: string;
+  user_id: string;
+  content: string;
+  created_at: string;
+}
+
 export default function Blog() {
   const { user } = useAuth();
   const { showToast } = useToast();
-  const [blogs, setBlogs] = useState<Blog[]>([]);
+  const [blogs, setBlogs] = useState<BlogRecord[]>([]);
   const [profiles, setProfiles] = useState<Record<string, Profile>>({});
   const [loading, setLoading] = useState(true);
   const [category, setCategory] = useState('All');
-  const [selectedBlog, setSelectedBlog] = useState<Blog | null>(null);
+  const [selectedBlog, setSelectedBlog] = useState<BlogRecord | null>(null);
   const [comments, setComments] = useState<BlogComment[]>([]);
   const [commentProfiles, setCommentProfiles] = useState<Record<string, Profile>>({});
   const [newComment, setNewComment] = useState('');
@@ -33,7 +45,7 @@ export default function Blog() {
         setLoading(false);
         return;
       }
-      const blogData = (data as Blog[]) ?? [];
+      const blogData = (data as BlogRecord[]) ?? [];
       setBlogs(blogData);
       const userIds = [...new Set(blogData.map((b) => b.user_id))];
       if (userIds.length > 0) {
@@ -50,7 +62,7 @@ export default function Blog() {
 
   const filtered = category === 'All' ? blogs : blogs.filter((b) => b.category === category);
 
-  const openBlog = async (blog: Blog) => {
+  const openBlog = async (blog: BlogRecord) => {
     setSelectedBlog(blog);
     const { data } = await supabase.from('blog_comments').select('*').eq('blog_id', blog.id).order('created_at', { ascending: true });
     setComments((data as BlogComment[]) ?? []);
@@ -82,7 +94,7 @@ export default function Blog() {
     showToast('Comment posted!', 'success');
   };
 
-  const handleLike = async (blog: Blog) => {
+  const handleLike = async (blog: BlogRecord) => {
     if (!user) {
       showToast('Sign in to like', 'info');
       return;
@@ -138,7 +150,7 @@ export default function Blog() {
       showToast('Could not create blog', 'error');
       return;
     }
-    setBlogs((prev) => [data as Blog, ...prev]);
+    setBlogs((prev) => [data as BlogRecord, ...prev]);
     setForm({ title: '', content: '', category: 'General', image_url: '', video_url: '' });
     setShowCreate(false);
     showToast('Blog published!', 'success');
@@ -185,13 +197,13 @@ export default function Blog() {
           ) : (
             <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
               {filtered.map((blog, i) => {
-                const author = profiles[blog.user_id];
+                 const author = blog.user_id ? profiles[blog.user_id] : undefined;
                 return (
                   <motion.div key={blog.id} initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: Math.min(i * 0.06, 0.5) }}
                     className="glass-card overflow-hidden group hover:shadow-2xl transition-all duration-300 hover:-translate-y-1 cursor-pointer" onClick={() => openBlog(blog)}>
                     <div className="relative h-48 overflow-hidden bg-gradient-to-br from-primary-100 to-gold-100 dark:from-slate-800 dark:to-slate-700">
                       {blog.image_url ? (
-                        <img src={blog.image_url} alt={blog.title} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
+                         <img src={blog.image_url || undefined} alt={blog.title || 'Blog image'} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
                       ) : blog.video_url ? (
                         <div className="flex items-center justify-center h-full"><Play className="h-16 w-16 text-primary-300" /></div>
                       ) : (
@@ -226,9 +238,9 @@ export default function Blog() {
             <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }} onClick={(e) => e.stopPropagation()}
               className="glass-card max-w-2xl w-full max-h-[90vh] overflow-y-auto scrollbar-thin">
               <div className="relative">
-                {selectedBlog.image_url && <img src={selectedBlog.image_url} alt={selectedBlog.title} className="w-full h-64 object-cover" />}
+                {selectedBlog.image_url && <img src={selectedBlog.image_url || undefined} alt={selectedBlog.title || 'Blog image'} className="w-full h-64 object-cover" />}
                 {selectedBlog.video_url && (
-                  <div className="aspect-video bg-black"><iframe src={selectedBlog.video_url} title={selectedBlog.title} className="w-full h-full" allowFullScreen /></div>
+                  <div className="aspect-video bg-black"><iframe src={selectedBlog.video_url || undefined} title={selectedBlog.title || 'Blog video'} className="w-full h-full" allowFullScreen /></div>
                 )}
                 <button onClick={() => setSelectedBlog(null)} className="absolute top-4 right-4 p-2 rounded-xl bg-black/40 backdrop-blur-md text-white hover:bg-black/60"><X className="h-5 w-5" /></button>
               </div>

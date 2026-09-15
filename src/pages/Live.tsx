@@ -355,9 +355,11 @@ function BroadcastView({
   micOn: boolean;
   onLeave: () => void;
 }) {
-  const { join, leave, toggleWebcam, toggleMic, webcamOn, micOn: meetingMicOn, participants, localParticipant } = useMeeting();
+  const { join, leave, toggleWebcam, toggleMic, participants, localParticipant } = useMeeting();
   const [joined, setJoined] = useState(false);
   const [viewerCount, setViewerCount] = useState(0);
+  const [webcamOn, setWebcamOn] = useState(camOn);
+  const [meetingMicOn, setMeetingMicOn] = useState(micOn);
 
   useEffect(() => {
     join().then(() => setJoined(true));
@@ -420,7 +422,10 @@ function BroadcastView({
       {/* Controls */}
       <div className="flex items-center justify-center gap-4 px-4 py-4 bg-slate-900 border-t border-slate-800">
         <button
-          onClick={() => toggleWebcam()}
+          onClick={() => {
+            toggleWebcam();
+            setWebcamOn((current) => !current);
+          }}
           className={`flex flex-col items-center gap-1 px-6 py-3 rounded-xl font-medium transition-all ${
             webcamOn ? 'bg-primary-600 text-white' : 'glass'
           }`}
@@ -429,7 +434,10 @@ function BroadcastView({
           <span className="text-xs">Camera</span>
         </button>
         <button
-          onClick={() => toggleMic()}
+          onClick={() => {
+            toggleMic();
+            setMeetingMicOn((current) => !current);
+          }}
           className={`flex flex-col items-center gap-1 px-6 py-3 rounded-xl font-medium transition-all ${
             meetingMicOn ? 'bg-primary-600 text-white' : 'glass'
           }`}

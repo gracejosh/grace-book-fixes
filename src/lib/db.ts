@@ -107,7 +107,7 @@ function createStore(
 function requestToPromise<T>(
   storeName: StoreName,
   mode: IDBTransactionMode,
-  createRequest: (store: IDBObjectStore) => IDBRequest<T>,
+  createRequest: (store: IDBObjectStore) => IDBRequest<any>,
 ): Promise<T> {
   return initDB().then(
     (database) =>

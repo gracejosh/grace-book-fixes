@@ -84,7 +84,7 @@ const Books: React.FC = () => {
   useEffect(() => {
     if (!sharingBookId) return;
 
-    const handleClickOutside = (e: MouseEvent) => {
+    const handleClickOutside = (e: Event) => {
       const ref = shareMenuRefs.current[sharingBookId];
       if (ref && !ref.contains(e.target as Node)) {
         setSharingBookId(null);

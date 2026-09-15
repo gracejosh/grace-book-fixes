@@ -1,11 +1,20 @@
 import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { supabase } from '@/lib/supabase';
-import type { PopupAd } from '@/types';
 import { X, ExternalLink } from 'lucide-react';
 
 const POPUP_INTERVAL = 30 * 60 * 1000; // 30 minutes
 const STORAGE_KEY = 'grace_book_last_popup';
+
+interface PopupAd {
+  id: string;
+  title: string;
+  image_url: string | null;
+  content: string | null;
+  link_url: string | null;
+  is_active: boolean;
+  created_at: string;
+}
 
 export default function PopupAds() {
   const [ad, setAd] = useState<PopupAd | null>(null);

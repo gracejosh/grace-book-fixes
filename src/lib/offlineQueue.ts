@@ -111,8 +111,12 @@ async function replaySupabaseCall(action: QueuedAction): Promise<void> {
     if (!filters) throw new Error('Queued update requires a match or filters object.');
     result = await applyFilters(query.update(data), filters);
   } else if (method === 'delete') {
-    const filters = extractFilters(payload) || payload;
-    if (!filters || typeof filters !== 'object') {
+    const filters = extractFilters(payload) ?? (
+      payload && typeof payload === 'object'
+        ? payload as Record<string, unknown>
+        : undefined
+    );
+    if (!filters) {
       throw new Error('Queued delete requires a filter object.');
     }
     result = await applyFilters(query.delete(), filters);
