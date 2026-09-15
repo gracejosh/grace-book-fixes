@@ -935,6 +935,9 @@ function BibleStyles() {
       }
 
       .bible-verse-text {
+        min-width: 0;
+        overflow-wrap: anywhere;
+        word-break: break-word;
         font-family: Georgia, "Times New Roman", serif;
         font-size: 17px;
         line-height: 28px;
