@@ -6,7 +6,7 @@ import { useLang } from '@/context/LanguageContext';
 import { useToast } from '@/context/ToastContext';
 import { getDailyVerseEntry } from '@/lib/dailyVerses';
 import { fetchVerseForLang, type BibleVerseData } from '@/lib/bibleApi';
-import { BookOpen, Library, GraduationCap, BrainCircuit, MessageCircle, ArrowRight, Quote, Users, BookMarked, Award, MessageSquare, Sparkles, Heart, Code, RefreshCw, LayoutGrid, Radio, Play, Pause, AlertCircle } from 'lucide-react';
+import { BookOpen, Library, GraduationCap, BrainCircuit, MessageCircle, ArrowRight, Quote, Users, BookMarked, Award, MessageSquare, Sparkles, Heart, Code, RefreshCw, LayoutGrid } from 'lucide-react';
 
 const navCardData = [
   { to: '/posts', titleKey: 'home.card.posts', descKey: 'home.card.postsDesc', icon: LayoutGrid, gradient: 'from-primary-500 to-primary-700' },
@@ -17,134 +17,6 @@ const navCardData = [
   { to: '/about', titleKey: 'home.card.about', descKey: 'home.card.aboutDesc', icon: Sparkles, gradient: 'from-violet-500 to-violet-700' },
 ];
 
-const testimonials = [
-  { name: 'Sarah M.', text: 'Grace Book has transformed my daily devotional time. The verses speak directly to my heart every morning.', role: 'Member since 2023' },
-  { name: 'David K.', text: 'The free courses are incredibly well-made. I have grown so much in my understanding of Scripture.', role: 'Bible Study Leader' },
-  { name: 'Grace L.', text: 'The community chat connects me with believers from around the world. It feels like a global family.', role: 'Active Member' },
-];
-
-const RADIO_STATIONS = [
-  { name: 'K-LOVE', url: 'https://maestro.emfcdn.com/stream/k-love/tunein/aac' },
-  { name: 'Air1', url: 'https://maestro.emfcdn.com/stream/air1/tunein/aac' },
-];
-
-function RadioCard() {
-  const [currentStation, setCurrentStation] = useState(0);
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [error, setError] = useState(false);
-  const [eqBars, setEqBars] = useState([0, 0, 0]);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
-
-  useEffect(() => {
-    if (isPlaying) {
-      const interval = setInterval(() => {
-        setEqBars([
-          Math.random() * 100,
-          Math.random() * 100,
-          Math.random() * 100,
-        ]);
-      }, 200);
-      return () => clearInterval(interval);
-    } else {
-      setEqBars([0, 0, 0]);
-    }
-  }, [isPlaying]);
-
-  const togglePlay = async () => {
-    if (!audioRef.current) {
-      audioRef.current = new Audio(RADIO_STATIONS[currentStation].url);
-      audioRef.current.addEventListener('error', () => {
-        setError(true);
-        setIsPlaying(false);
-      });
-    }
-    if (isPlaying) {
-      audioRef.current.pause();
-      setIsPlaying(false);
-    } else {
-      setError(false);
-      audioRef.current.src = RADIO_STATIONS[currentStation].url;
-      try {
-        await audioRef.current.play();
-        setIsPlaying(true);
-      } catch {
-        setError(true);
-      }
-    }
-  };
-
-  const switchStation = (idx: number) => {
-    setCurrentStation(idx);
-    setError(false);
-    if (isPlaying && audioRef.current) {
-      audioRef.current.src = RADIO_STATIONS[idx].url;
-      audioRef.current.play().catch(() => setError(true));
-    }
-  };
-
-  return (
-    <div className="glass-card p-6">
-      <div className="flex items-center gap-3 mb-4">
-        <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-gradient-to-br from-primary-500 to-primary-700">
-          <Radio className="h-6 w-6 text-white" />
-        </div>
-        <div>
-          <h3 className="text-xl font-bold">Grace Radio</h3>
-          <p className="text-sm text-slate-500 dark:text-slate-400">Christian music, 24/7</p>
-        </div>
-      </div>
-
-      {/* Now playing + equalizer */}
-      <div className="flex items-center gap-4 mb-4">
-        <button
-          onClick={togglePlay}
-          className="w-14 h-14 rounded-full bg-gradient-to-br from-primary-600 to-primary-700 text-white flex items-center justify-center shrink-0 hover:scale-105 transition-transform shadow-lg"
-        >
-          {isPlaying ? <Pause className="h-6 w-6" /> : <Play className="h-6 w-6 ml-0.5" />}
-        </button>
-        <div className="flex-1 min-w-0">
-          <p className="font-semibold text-sm truncate">{RADIO_STATIONS[currentStation].name}</p>
-          <p className="text-xs text-slate-500 dark:text-slate-400">{isPlaying ? 'Now playing' : 'Tap play to listen'}</p>
-        </div>
-        {/* 3-bar equalizer */}
-        <div className="flex items-end gap-1 h-8">
-          {eqBars.map((h, i) => (
-            <div
-              key={i}
-              className={`w-1.5 rounded-full transition-all duration-200 ${isPlaying ? 'bg-gradient-to-t from-primary-500 to-gold-500' : 'bg-slate-300 dark:bg-slate-600'}`}
-              style={{ height: isPlaying ? `${Math.max(4, h * 0.3)}px` : '4px' }}
-            />
-          ))}
-        </div>
-      </div>
-
-      {/* Error message */}
-      {error && (
-        <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 text-xs mb-3">
-          <AlertCircle className="h-3.5 w-3.5 shrink-0" />
-          Stream unavailable
-        </div>
-      )}
-
-      {/* Station selector */}
-      <div className="flex gap-2">
-        {RADIO_STATIONS.map((station, idx) => (
-          <button
-            key={station.name}
-            onClick={() => switchStation(idx)}
-            className={`flex-1 py-2.5 rounded-xl text-sm font-medium transition-all ${
-              currentStation === idx
-                ? 'bg-primary-100 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300 border border-primary-300 dark:border-primary-700'
-                : 'glass hover:scale-105'
-            }`}
-          >
-            {station.name}
-          </button>
-        ))}
-      </div>
-    </div>
-  );
-}
 
 export default function Home() {
   const { t, lang } = useLang();
@@ -327,9 +199,15 @@ export default function Home() {
         </div>
       </section>
 
-      <section className="py-8 bg-white dark:bg-slate-900">
+      <section className="py-12 bg-white dark:bg-slate-900">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <RadioCard />
+          <div className="overflow-hidden rounded-3xl shadow-xl">
+            <img
+              src="https://raw.githubusercontent.com/gracejosh/grace-book-fixes/fefea426d0bcd56f0cf98756d48cdb2b2e8ec1aa/telebirr.png"
+              alt="Grace Book banner"
+              className="block w-full h-auto object-cover"
+            />
+          </div>
         </div>
       </section>
 
@@ -358,35 +236,6 @@ export default function Home() {
                 </motion.div>
               );
             })}
-          </div>
-        </div>
-      </section>
-
-      <section className="section-padding bg-gradient-to-br from-primary-50 to-gold-50 dark:from-slate-900 dark:to-slate-950">
-        <div className="container-narrow">
-          <motion.div initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} className="text-center mb-12">
-            <h2 className="text-3xl sm:text-4xl font-bold mb-3">{t('home.testimonialsTitle')}</h2>
-            <p className="text-slate-500 dark:text-slate-400">{t('home.testimonialsDesc')}</p>
-          </motion.div>
-
-          <div className="grid md:grid-cols-3 gap-6">
-            {testimonials.map((tm, i) => (
-              <motion.div key={tm.name} initial={{ opacity: 0, y: 30 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ delay: i * 0.1 }} className="glass-card p-6">
-                <div className="flex gap-1 mb-4">
-                  {Array.from({ length: 5 }).map((_, j) => (<span key={j} className="text-gold-500">★</span>))}
-                </div>
-                <p className="text-slate-700 dark:text-slate-300 mb-6 leading-relaxed italic">"{tm.text}"</p>
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary-500 to-gold-500 flex items-center justify-center text-white font-bold">
-                    {tm.name.charAt(0)}
-                  </div>
-                  <div>
-                    <p className="font-semibold text-sm">{tm.name}</p>
-                    <p className="text-xs text-slate-500">{tm.role}</p>
-                  </div>
-                </div>
-              </motion.div>
-            ))}
           </div>
         </div>
       </section>
