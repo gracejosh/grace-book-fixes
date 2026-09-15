@@ -2,7 +2,8 @@ import { useState, type ReactNode } from 'react';
 import { Check, Coffee, Copy, ExternalLink, Heart, Mail, Music2, Send } from 'lucide-react';
 
 const TELEBIRR_NUMBER = '251911573334';
-const TELEBIRR_LOGO_URL = 'https://raw.githubusercontent.com/gracejosh/grace-book-fixes/d34d4ead7fd915dfcc16b9a8d8557e879488e309/telebirr.png';
+const TELEBIRR_LOGO_URL = 'https://raw.githubusercontent.com/gracejosh/grace-book-fixes/a63d71ecca8396b2d250caa92a3036645abfb5ba/telebireal.jpeg';
+const TELEBIRR_BANNER_URL = 'https://raw.githubusercontent.com/gracejosh/grace-book-fixes/d34d4ead7fd915dfcc16b9a8d8557e879488e309/telebirr.png';
 
 function ActionLink({ href, children }: { href: string; children: ReactNode }) {
   return (
@@ -34,9 +35,9 @@ export default function Donate() {
   return (
     <div className="min-h-full bg-gradient-to-b from-primary-50 via-white to-gold-50/60 px-4 py-8 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950 sm:px-6 lg:px-8">
       <div className="mx-auto max-w-6xl">
-        <section className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-primary-700 via-primary-600 to-gold-500 px-6 py-10 text-white shadow-xl sm:px-10 sm:py-14">
-          <div className="absolute -right-20 -top-24 h-64 w-64 rounded-full bg-white/10 blur-3xl" />
-          <div className="absolute -bottom-24 -left-16 h-56 w-56 rounded-full bg-gold-300/20 blur-3xl" />
+        <section className="relative isolate overflow-hidden rounded-3xl bg-slate-900 px-6 py-10 text-white shadow-xl sm:px-10 sm:py-14">
+          <img src={TELEBIRR_BANNER_URL} alt="" aria-hidden="true" className="absolute inset-0 h-full w-full object-cover opacity-30" loading="eager" />
+          <div className="absolute inset-0 bg-gradient-to-r from-primary-950/90 via-primary-800/75 to-gold-700/60" />
           <div className="relative max-w-2xl">
             <div className="mb-5 inline-flex items-center gap-2 rounded-full bg-white/15 px-3 py-1.5 text-sm font-semibold backdrop-blur-sm">
               <Heart className="h-4 w-4 fill-current" /> Support Grace Book
@@ -95,7 +96,7 @@ export default function Donate() {
             <p className="mt-5 text-sm font-semibold text-slate-700 dark:text-slate-200">TikTok</p>
             <h2 className="mt-1 text-xl font-bold text-slate-900 dark:text-white">Follow us for updates</h2>
             <p className="mt-3 text-sm leading-6 text-slate-600 dark:text-slate-300">Find encouragement, updates, and Grace Book moments.</p>
-            <div className="mt-5"><ActionLink href="https://www.tiktok.com/@graceapp">Follow on TikTok</ActionLink></div>
+            <div className="mt-5"><ActionLink href="https://www.tiktok.com/@gracebookpro">Follow on TikTok</ActionLink></div>
           </article>
 
           <article className="rounded-3xl border border-dashed border-gold-300 bg-gold-50/70 p-6 shadow-lg shadow-gold-100/50 dark:border-gold-700 dark:bg-gold-900/10 dark:shadow-none lg:col-span-2">
