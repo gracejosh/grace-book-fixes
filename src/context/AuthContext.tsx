@@ -16,6 +16,22 @@ interface AuthContextValue {
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
+function showToastFromAuth(message: string) {
+  const el = document.createElement('div');
+  el.textContent = message;
+  el.style.cssText = 'position:fixed;bottom:24px;right:24px;z-index:99999;background:#0f172a;color:#fff;padding:12px 20px;border-radius:12px;font-size:14px;font-family:inherit;box-shadow:0 8px 24px rgba(0,0,0,0.25);opacity:0;transform:translateX(20px);transition:all 0.3s ease;max-width:320px;';
+  document.body.appendChild(el);
+  requestAnimationFrame(() => {
+    el.style.opacity = '1';
+    el.style.transform = 'translateX(0)';
+  });
+  setTimeout(() => {
+    el.style.opacity = '0';
+    el.style.transform = 'translateX(20px)';
+    setTimeout(() => el.remove(), 300);
+  }, 4000);
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [user, setUser] = useState<User | null>(null);
@@ -61,6 +77,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const signUp = async (email: string, password: string, username: string, fullName: string) => {
+    const params = new URLSearchParams(window.location.search);
+    const referrerId = params.get('ref');
+
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
@@ -73,6 +92,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         username,
         full_name: fullName,
       });
+
+      if (referrerId && referrerId !== data.user.id) {
+        try {
+          await Promise.all([
+            supabase.from('follows').insert({ follower_id: data.user.id, following_id: referrerId }),
+            supabase.from('follows').insert({ follower_id: referrerId, following_id: data.user.id }),
+          ]);
+          await supabase.from('referrals').insert({ referrer_id: referrerId, new_user_id: data.user.id });
+          await supabase.rpc('increment_referral_count', { referrer_id: referrerId });
+          showToastFromAuth('Welcome! You joined via a friend');
+          const url = new URL(window.location.href);
+          url.searchParams.delete('ref');
+          window.history.replaceState({}, '', url.toString());
+        } catch {
+          // referral failure should not block signup
+        }
+      }
     }
     return { error: null };
   };
