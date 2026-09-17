@@ -5,6 +5,7 @@ import {
   Image as ImageIcon, GraduationCap, BrainCircuit, Newspaper,
   Sparkles, Settings as SettingsIcon, ChevronRight,
   BookOpen, NotebookPen, Radio, Heart, Activity,
+  Compass, Bell, Search as SearchIcon,
 } from 'lucide-react';
 import { useState } from 'react';
 import { useTheme } from '@/context/ThemeContext';
@@ -23,6 +24,9 @@ const bottomNavLinks = [
 
 const drawerLinks = [
   { to: '/feed', key: 'nav.feed', icon: Activity },
+  { to: '/explore', key: 'nav.explore', icon: Compass },
+  { to: '/notifications', key: 'nav.notifications', icon: Bell },
+  { to: '/search', key: 'nav.search', icon: SearchIcon },
   { to: '/bible', key: 'nav.bible', icon: BookOpen },
   { to: '/flyers', key: 'nav.flyers', icon: ImageIcon },
   { to: '/courses', key: 'nav.courses', icon: GraduationCap },

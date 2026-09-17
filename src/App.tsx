@@ -28,6 +28,9 @@ import NotFound from '@/pages/NotFound';
 import Donate from '@/pages/Donate';
 import Followers from '@/pages/Followers';
 import Feed from '@/pages/Feed';
+import Explore from '@/pages/Explore';
+import Notifications from '@/pages/Notifications';
+import Search from '@/pages/Search';
 
 function RouteAwareAdPopup() {
   const location = useLocation();
@@ -54,6 +57,9 @@ export default function App() {
                   <main className="flex-1 pt-14 pb-16">
                     <Routes>
                       <Route path="/feed" element={<Feed />} />
+                      <Route path="/explore" element={<Explore />} />
+                      <Route path="/notifications" element={<Notifications />} />
+                      <Route path="/search" element={<Search />} />
                       <Route path="/" element={<Home />} />
                       <Route path="/posts" element={<Posts />} />
                       <Route path="/books" element={<Books />} />
