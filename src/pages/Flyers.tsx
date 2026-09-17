@@ -131,11 +131,10 @@ export default function Flyers() {
   const canDelete = (flyer: Flyer) => user?.id === flyer.user_id || profile?.is_admin;
 
   const handleShare = useCallback(async (flyer: Flyer) => {
-    const refParam = user?.id ? `?ref=${user.id}` : '';
-    const baseUrl = window.location.hostname.includes('vercel.app') && !window.location.hostname.startsWith('grace-book-fixes.')
-      ? 'https://grace-book-fixes.vercel.app'
-      : window.location.origin;
-    const shareUrl = baseUrl + '/flyers' + refParam;
+    const shareUrl = user
+      ? `https://grace-book-fixes.vercel.app/flyers?ref=${user.id}`
+      : 'https://grace-book-fixes.vercel.app/flyers';
+    console.log('Share URL:', shareUrl);
     const shareData = {
       title: flyer.title || 'Grace Book Flyer',
       text: flyer.description || flyer.title || 'Check out this gospel flyer on Grace Book',
