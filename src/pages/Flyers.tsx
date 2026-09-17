@@ -159,29 +159,34 @@ export default function Flyers() {
       showToast('No images to download', 'error');
       return;
     }
-    const toastId = showToast(`Downloading 0%...`, 'info');
     try {
       for (let i = 0; i < images.length; i++) {
-        const response = await fetch(images[i]);
+        showToast(`Downloading ${i + 1}/${images.length}...`, 'info');
+        const proxyUrl = `/api/download?url=${encodeURIComponent(images[i])}`;
+        const response = await fetch(proxyUrl);
         if (!response.ok) throw new Error('Fetch failed');
         const blob = await response.blob();
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        const safeName = (flyer.title || 'flyer').replace(/[^a-z0-9]/gi, '_').toLowerCase();
-        a.download = `${safeName}_${i + 1}.jpg`;
+        a.download = `flyer-${Date.now()}-${i}.jpg`;
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
-        const pct = Math.round(((i + 1) / images.length) * 100);
-        showToast(`Downloading ${pct}%...`, 'info');
+        if (i < images.length - 1) {
+          await new Promise((r) => setTimeout(r, 500));
+        }
+      }
+      await supabase.rpc('increment_flyer_downloads', { flyer_id: flyer.id });
+      if (user) {
+        await supabase.from('flyer_downloads').insert({ flyer_id: flyer.id, user_id: user.id });
       }
       showToast('Downloaded ✓', 'success');
     } catch {
       showToast('Download failed', 'error');
     }
-  }, [showToast]);
+  }, [showToast, user]);
 
   return (
     <div className="min-h-screen">
