@@ -27,6 +27,7 @@ import Bible from '@/pages/Bible';
 import NotFound from '@/pages/NotFound';
 import Donate from '@/pages/Donate';
 import Followers from '@/pages/Followers';
+import Feed from '@/pages/Feed';
 
 function RouteAwareAdPopup() {
   const location = useLocation();
@@ -52,6 +53,7 @@ export default function App() {
                   <Navbar />
                   <main className="flex-1 pt-14 pb-16">
                     <Routes>
+                      <Route path="/feed" element={<Feed />} />
                       <Route path="/" element={<Home />} />
                       <Route path="/posts" element={<Posts />} />
                       <Route path="/books" element={<Books />} />
