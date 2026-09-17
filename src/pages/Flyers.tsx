@@ -132,7 +132,10 @@ export default function Flyers() {
 
   const handleShare = useCallback(async (flyer: Flyer) => {
     const refParam = user?.id ? `?ref=${user.id}` : '';
-    const shareUrl = window.location.origin + '/flyers' + refParam;
+    const baseUrl = window.location.hostname.includes('vercel.app') && !window.location.hostname.startsWith('grace-book-fixes.')
+      ? 'https://grace-book-fixes.vercel.app'
+      : window.location.origin;
+    const shareUrl = baseUrl + '/flyers' + refParam;
     const shareData = {
       title: flyer.title || 'Grace Book Flyer',
       text: flyer.description || flyer.title || 'Check out this gospel flyer on Grace Book',
@@ -194,7 +197,8 @@ export default function Flyers() {
       {/* Hero */}
       <section className="relative overflow-hidden bg-gradient-to-br from-primary-900 via-primary-800 to-slate-900 dark:from-slate-950 dark:via-primary-950 dark:to-slate-950 py-16">
         <div className="absolute inset-0 opacity-20">
-          <div className="absolute top-10 left-20 w-64 h-64 bg-gold-500 rounded-full blur-3xl animate-float" />\n          <div className="absolute bottom-10 right-20 w-64 h-64 bg-primary-500 rounded-full blur-3xl animate-float" style={{ animationDelay: '3s' }} />
+          <div className="absolute top-10 left-20 w-64 h-64 bg-gold-500 rounded-full blur-3xl animate-float" />
+          <div className="absolute bottom-10 right-20 w-64 h-64 bg-primary-500 rounded-full blur-3xl animate-float" style={{ animationDelay: '3s' }} />
         </div>
         <div className="relative max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
           <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/10 backdrop-blur-md border border-white/20 mb-6">
