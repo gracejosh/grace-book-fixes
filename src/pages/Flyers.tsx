@@ -9,8 +9,7 @@ import type { Flyer, Profile } from '@/types';
 import { EmptyState } from '@/components/ui';
 import {
   Heart, Share2, Plus, X, ChevronLeft, ChevronRight, Loader,
-  Facebook, Twitter, MessageCircle, Mail, Search, Image as ImageIcon,
-  Trash2, Send,
+  Search, Image as ImageIcon, Trash2, Send, Download, Check,
 } from 'lucide-react';
 
 const CATEGORIES = [
@@ -41,7 +40,6 @@ export default function Flyers() {
   const [category, setCategory] = useState('all');
   const [likedFlyers, setLikedFlyers] = useState<Set<string>>(new Set());
   const [showUpload, setShowUpload] = useState(false);
-  const [shareFlyer, setShareFlyer] = useState<Flyer | null>(null);
 
   const loadFlyers = useCallback(async () => {
     setLoading(true);
@@ -132,9 +130,58 @@ export default function Flyers() {
 
   const canDelete = (flyer: Flyer) => user?.id === flyer.user_id || profile?.is_admin;
 
-  const shareText = (flyer: Flyer) => encodeURIComponent(
-    flyer.title || flyer.description || 'Check out this gospel flyer on Grace Book'
-  );
+  const handleShare = useCallback(async (flyer: Flyer) => {
+    const shareUrl = window.location.origin + '/flyers';
+    const shareData = {
+      title: flyer.title || 'Grace Book Flyer',
+      text: flyer.description || flyer.title || 'Check out this gospel flyer on Grace Book',
+      url: shareUrl,
+    };
+    if (navigator.share) {
+      try {
+        await navigator.share(shareData);
+      } catch {
+        // user cancelled — no action needed
+      }
+    } else {
+      try {
+        await navigator.clipboard.writeText(shareUrl);
+        showToast('Link copied', 'info');
+      } catch {
+        showToast('Could not copy link', 'error');
+      }
+    }
+  }, [showToast]);
+
+  const handleDownload = useCallback(async (flyer: Flyer) => {
+    const images = flyer.images?.length ? flyer.images : [];
+    if (images.length === 0) {
+      showToast('No images to download', 'error');
+      return;
+    }
+    const toastId = showToast(`Downloading 0%...`, 'info');
+    try {
+      for (let i = 0; i < images.length; i++) {
+        const response = await fetch(images[i]);
+        if (!response.ok) throw new Error('Fetch failed');
+        const blob = await response.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        const safeName = (flyer.title || 'flyer').replace(/[^a-z0-9]/gi, '_').toLowerCase();
+        a.download = `${safeName}_${i + 1}.jpg`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        const pct = Math.round(((i + 1) / images.length) * 100);
+        showToast(`Downloading ${pct}%...`, 'info');
+      }
+      showToast('Downloaded ✓', 'success');
+    } catch {
+      showToast('Download failed', 'error');
+    }
+  }, [showToast]);
 
   return (
     <div className="min-h-screen">
@@ -176,7 +223,7 @@ export default function Flyers() {
                   className={`px-4 py-2 rounded-xl text-sm font-medium transition-all duration-200 ${
                     category === cat
                       ? 'bg-gradient-to-r from-primary-600 to-primary-700 text-white shadow-lg shadow-primary-600/25'
-                      : 'glass text-slate-600 dark:text-slate-300 hover:scale-105'
+                      : 'glasstext-slate-600 dark:text-slate-300 hover:scale-105'
                   }`}
                 >
                   {cat === 'all' ? 'All' : cat}
@@ -222,7 +269,8 @@ export default function Flyers() {
                   author={flyer.user_id ? authors[flyer.user_id] : undefined}
                   isLiked={likedFlyers.has(flyer.id)}
                   onLike={() => toggleLike(flyer)}
-                  onShare={() => setShareFlyer(flyer)}
+                  onShare={() => handleShare(flyer)}
+                  onDownload={() => handleDownload(flyer)}
                   onDelete={() => handleDelete(flyer)}
                   canDelete={canDelete(flyer) ? true : false}
                   index={i}
@@ -243,63 +291,19 @@ export default function Flyers() {
           />
         )}
       </AnimatePresence>
-
-      {/* Share Modal */}
-      <AnimatePresence>
-        {shareFlyer && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            onClick={() => setShareFlyer(null)}
-            className="fixed inset-0 z-[9999] bg-black/50 backdrop-blur-sm flex items-center justify-center p-4"
-          >
-            <motion.div
-              initial={{ scale: 0.9, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.9, opacity: 0 }}
-              onClick={(e) => e.stopPropagation()}
-              className="glass-card p-6 max-w-md w-full"
-            >
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-xl font-bold">Share This Flyer</h3>
-                <button onClick={() => setShareFlyer(null)} className="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700">
-                  <X className="h-5 w-5" />
-                </button>
-              </div>
-              <p className="text-sm text-slate-600 dark:text-slate-300 mb-4 italic">
-                {shareFlyer.title || shareFlyer.description?.slice(0, 100) || 'Grace Book Flyer'}
-              </p>
-              <div className="grid grid-cols-2 gap-3">
-                <a href={`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(window.location.origin + '/flyers')}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 p-3 rounded-xl bg-blue-600 text-white font-medium hover:scale-105 transition-transform">
-                  <Facebook className="h-5 w-5" /> Facebook
-                </a>
-                <a href={`https://twitter.com/intent/tweet?text=${shareText(shareFlyer)}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 p-3 rounded-xl bg-sky-500 text-white font-medium hover:scale-105 transition-transform">
-                  <Twitter className="h-5 w-5" /> Twitter
-                </a>
-                <a href={`https://wa.me/?text=${shareText(shareFlyer)}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 p-3 rounded-xl bg-green-500 text-white font-medium hover:scale-105 transition-transform">
-                  <MessageCircle className="h-5 w-5" /> WhatsApp
-                </a>
-                <a href={`mailto:?subject=Check out this flyer&body=${shareText(shareFlyer)}`} className="flex items-center gap-2 p-3 rounded-xl bg-slate-600 text-white font-medium hover:scale-105 transition-transform">
-                  <Mail className="h-5 w-5" /> Email
-                </a>
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
     </div>
   );
 }
 
 function FlyerCard({
-  flyer, author, isLiked, onLike, onShare, onDelete, canDelete, index,
+  flyer, author, isLiked, onLike, onShare, onDownload, onDelete, canDelete, index,
 }: {
   flyer: Flyer;
   author?: Profile;
   isLiked: boolean;
   onLike: () => void;
   onShare: () => void;
+  onDownload: () => void;
   onDelete: () => void;
   canDelete: boolean;
   index: number;
@@ -442,6 +446,13 @@ function FlyerCard({
           >
             <Heart className={`h-4 w-4 ${isLiked ? 'fill-red-500' : ''}`} />
             {flyer.likes_count > 0 && flyer.likes_count}
+          </button>
+
+          <button
+            onClick={onDownload}
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700 transition-all"
+          >
+            <Download className="h-4 w-4" />
           </button>
 
           <button
