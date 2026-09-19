@@ -21,7 +21,7 @@ import Flyers from '@/pages/Flyers';
 import Blog from '@/pages/Blog';
 import Blogs from '@/pages/Blogs';
 import Settings from '@/pages/Settings';
-import Live from '@/pages/Live';
+import Churches from '@/pages/Churches';
 import Notebook from '@/pages/Notebook';
 import Bible from '@/pages/Bible';
 import NotFound from '@/pages/NotFound';
@@ -76,7 +76,7 @@ export default function App() {
                       <Route path="/blog" element={<Blog />} />
                       <Route path="/blogs" element={<Blogs />} />
                       <Route path="/settings" element={<Settings />} />
-                      <Route path="/live" element={<Live />} />
+                      <Route path="/churches" element={<Churches />} />
                       <Route path="/notebook" element={<Notebook />} />
                       <Route path="/bible" element={<Bible />} />
                       <Route path="*" element={<NotFound />} />
@@ -91,4 +91,3 @@ export default function App() {
       </ThemeProvider>
     </ErrorBoundary>
   );
-}
